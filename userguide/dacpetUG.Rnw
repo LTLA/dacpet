@@ -114,35 +114,36 @@ readers will have to modify the code according to their own circumstances.
 \chapter{Preparing tag directories}
 
 \section{Splitting tags and aligning reads}
-Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has
-a linker and tag component. The linker sequence must be identified as either A
-or B. It must then be removed prior to alignment of the tag to the reference
-genome. Some external programs can be used to facilitate this process,
-including:
-\begin{itemize}
-\item \textsf{splitLinkers}: a C++ program that splits each pair of FastQ files
-into a set of pairs of files of tag sequences for the AA, AB and BB linker
-combinations.
-\item \textsf{chia{\textunderscore}map.sh}: a Bash script that performs quality
-control with \textsf{fastqc}, linker splitting, tag alignment with
-\textsf{Bowtie2} \citep{langmead2012bowtie} and duplicate marking with Picard's
-\textsf{markDuplicates}, given a set of SRA or Gzipped FastQ files.
-\end{itemize}
-You can probably find these programs somewhere in cyberspace. The ultimate aim
-is to produce a name-sorted BAM file for each linker combination in each
-library, i.e., 3 BAM files for each incoming ChIA-PET library. For the MCF7
-dataset, this results in 6 files overall:
+Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has a linker and tag component. 
+The linker sequence must be identified as either A or B for downstream analysis.
+Then, it must be removed so that the tag can be aligned to the reference genome.
+This can be achieved with the \code{splitLinkers} function which takes two FastQ files of tag-linker pairs and generates several paired FastQ files.
+Each pair of files contains the tag pairs corresponding to each linker combination, i.e., AA, BB, AB or other/unknown.
+
+<<eval=FALSE>>=
+require(dacpet)
+splitLinkers("SRR372741_1.fastq", "SRR372741_2.fastq", 
+    "GTTGGATAAGATATCG", "GTTGGAATGTATATCG", prefix="SRR372741")
+@
+
+<<echo=FALSE>>=
+require(dacpet)
+@
+
+The alignment itself can be performed with an appropriate aligner like \textsf{Bowtie2} \citep{langmead2012bowtie}.
+One should choose a mapping program that can handle 20 bp reads.
+Duplicate marking with the \textsf{MarkDuplicates} tool from the Picard suite is also recommended.
+The ultimate aim is to produce a name-sorted BAM file for each linker combination in each library, i.e., 3 BAM files for each incoming ChIA-PET library. 
+For the MCF7 dataset, this results in 6 files in total after processing and mapping (ignoring those with unknown linkers):
 
 <<>>=
-require(dacpet)
 bamfiles <- c("SRR372741_AA.bam", "SRR372741_AB.bam", "SRR372741_BB.bam", 
         "SRR372742_AA.bam", "SRR372742_AB.bam", "SRR372742_BB.bam")
 @
 
-Note that the three files named \code{SRR372741\_*} correspond to a single
-library, as do those named \code{SRR372742\_*}. The two libraries represent
-different biological replicates according to the GEO entry, and can be used to
-assess the reproducibility of the results.
+Note that the three files named \code{SRR372741\_*} correspond to a single library, as do those named \code{SRR372742\_*}. 
+The two libraries represent different biological replicates according to the entry on NCBI GEO (accession number GSE33664).
+They will be used later to assess the reproducibility of the identified interactions.
 
 \section{Converting BAM files to tag directories}
 Repeated parsing of the BAM file is quite laborious for routine analyses.
