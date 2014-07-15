@@ -1,0 +1,1050 @@
+\documentclass[12pt]{report}
+\usepackage{fancyvrb,graphicx,natbib,url,comment,import,bm}
+\usepackage{tikz}
+
+% Margins
+\topmargin -0.1in
+\headheight 0in
+\headsep 0in
+\oddsidemargin -0.1in
+\evensidemargin -0.1in
+\textwidth 6.5in
+\textheight 8.3in
+
+% Sweave options
+\usepackage{Sweave}
+\SweaveOpts{keep.source=TRUE,prefix.string=plots-ug/ug,png=TRUE,pdf=FALSE}
+
+\DefineVerbatimEnvironment{Sinput}{Verbatim}{fontshape=sl,fontsize=\footnotesize}
+\DefineVerbatimEnvironment{Soutput}{Verbatim}{fontsize=\footnotesize}
+\DefineVerbatimEnvironment{Scode}{Verbatim}{fontsize=\footnotesize}
+%\fvset{listparameters={\setlength{\topsep}{0pt}}}
+\renewenvironment{Schunk}{\vspace{0pt}}{\vspace{0pt}}
+
+\DefineVerbatimEnvironment{Rcode}{Verbatim}{fontsize=\footnotesize}
+\newcommand{\edgeR}{edgeR}
+\newcommand{\pkgname}{dacpet}
+\newcommand{\code}[1]{{\small\texttt{#1}}}
+\newcommand{\R}{\textsf{R}}
+
+% Defining a comment box.
+\usepackage{framed,color}
+\definecolor{shadecolor}{rgb}{0.9, 0.9, 0.9}
+\newenvironment{combox}
+{ \begin{shaded}\begin{center}\begin{minipage}[t]{0.95\textwidth} }
+{ \end{minipage}\end{center}\end{shaded} }
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title{\pkgname{}: Differential analysis of ChIA-PET data \\ \vspace{0.2in} User's Guide}
+\author{Aaron Lun}
+
+% Set to change date for document, not compile date.
+\date{First edition 15 August 2012\\
+\vspace{6pt}
+Last revised 15 May 2014}
+
+% Removing the bibliography title so it shows up in the contents.
+\makeatletter
+\renewenvironment{thebibliography}[1]{%
+%     \section*{\refname}%
+%      \@mkboth{\MakeUppercase\refname}{\MakeUppercase\refname}%
+      \list{\@biblabel{\@arabic\c@enumiv}}%
+           {\settowidth\labelwidth{\@biblabel{#1}}%
+            \leftmargin\labelwidth
+            \advance\leftmargin\labelsep
+            \@openbib@code
+            \usecounter{enumiv}%
+            \let\p@enumiv\@empty
+            \renewcommand\theenumiv{\@arabic\c@enumiv}}%
+      \sloppy
+      \clubpenalty4000
+      \@clubpenalty \clubpenalty
+      \widowpenalty4000%
+      \sfcode`\.\@m}
+     {\def\@noitemerr
+       {\@latex@warning{Empty `thebibliography' environment}}%
+      \endlist}
+\makeatother
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+<<results=hide,echo=FALSE>>=
+dir.create("plots-ug")
+@
+
+\newpage
+
+\chapter{Introduction}
+\section{Scope}
+This document describes the analysis of CHIA-PET data with the \pkgname{}
+package. In particular, specific interactions are distinguished from
+non-specific ligation events by comparing the homo-linker and hetero-linker
+counts for each interaction. This is done in a statistically rigorous manner
+using the methods in the \edgeR{} package \citep{edgeR}. Knowledge of \edgeR{} is useful but
+is not necessary for reading.
+
+\section{How to get help}
+Most questions about individual functions should be answered by the
+documentation.  For example, if you want to know more about \code{preparePET},
+you can bring up the documentation by typing \code{?preparePET} or
+\code{help(preparePET)} at the \R{} prompt. If that doesn't help, reading this
+guide or contacting one of the authors is probably the best approach.
+Thoughtful suggestions for improvements are occassionally appreciated.
+
+\section{Quick start}
+As a quick demonstration of the analysis is largely impossible, I'll just
+leave this part empty. Suffice to say that there are several components of 
+the pipeline that shall be discussed:
+\begin{enumerate}
+\item converting BAM files to tag directories
+\item removing self-ligation events
+\item counting tag pairs for each interaction
+\item normalizing the linker combinations
+\item modelling biological variability
+\item testing for significant differences between homo-/hetero-linker counts
+\end{enumerate}
+In the various examples for this guide, we'll be using data from an experiment
+targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. Obviously, 
+readers will have to modify the code according to their own circumstances.
+
+\chapter{Preparing tag directories}
+
+\section{Splitting tags and aligning reads}
+Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has
+a linker and tag component. The linker sequence must be identified as either A
+or B. It must then be removed prior to alignment of the tag to the reference
+genome. Some external programs can be used to facilitate this process,
+including:
+\begin{itemize}
+\item \textsf{splitLinkers}: a C++ program that splits each pair of FastQ files
+into a set of pairs of files of tag sequences for the AA, AB and BB linker
+combinations.
+\item \textsf{chia{\textunderscore}map.sh}: a Bash script that performs quality
+control with \textsf{fastqc}, linker splitting, tag alignment with
+\textsf{Bowtie2} \citep{langmead2012bowtie} and duplicate marking with Picard's
+\textsf{markDuplicates}, given a set of SRA or Gzipped FastQ files.
+\end{itemize}
+You can probably find these programs somewhere in cyberspace. The ultimate aim
+is to produce a name-sorted BAM file for each linker combination in each
+library, i.e., 3 BAM files for each incoming ChIA-PET library. For the MCF7
+dataset, this results in 6 files overall:
+
+<<>>=
+require(dacpet)
+bamfiles <- c("SRR372741_AA.bam", "SRR372741_AB.bam", "SRR372741_BB.bam", 
+        "SRR372742_AA.bam", "SRR372742_AB.bam", "SRR372742_BB.bam")
+@
+
+Note that the three files named \code{SRR372741\_*} correspond to a single
+library, as do those named \code{SRR372742\_*}. The two libraries represent
+different biological replicates according to the GEO entry, and can be used to
+assess the reproducibility of the results.
+
+\section{Converting BAM files to tag directories}
+Repeated parsing of the BAM file is quite laborious for routine analyses.
+Instead, the BAM file is parsed once to generate a processed tag directory.
+Each directory contains a number of files, each of which contains all tag pairs
+mapped between a particular pair of chromosomes. Information can then be
+extracted efficiently from the tag directory for downstream processing. This
+parsing is performed using the \code{preparePET} function to generate a
+directory for each BAM file in the dataset. 
+
+<<>>=
+incoming <- bamfiles[1]
+outcoming <- sub("\\.bam", "", incoming)
+out <- preparePET(incoming, dir=outcoming, minq=20, dedup=TRUE)
+@
+
+The value of \code{minq} describes the minimum mapping quality score (MAPQ) for
+aligned tags. Both tags in each pair must have a MAPQ above \code{minq} for
+that pair to be reported in the directory. A reasonably stringent value is
+recommended given that alignment of short tags is likely to be error-prone.
+The \code{dedup} value specifies whether or not marked duplicates should be
+removed. This is recommended as the chance of obtaining exactly overlapping
+pairs is low. Any overlaps are likely to be PCR duplicates rather than genuine
+enrichment. The numbers of pairs with at least one poorly mapped or duplicate
+tag can be examined in the output:
+
+<<>>=
+out$pairs
+@
+
+In most cases, the duplicate tags are also those with low mapping qualities as
+the aligner tends to place unknown sequences within alignable regions. The
+total number of tag pairs is also shown, along with the number of pairs that
+are retained in the final directory. You can also have a look at the number of
+single tags or those with more than two alignments. These should be
+non-existent, otherwise it suggests that the BAM file is malformed.
+
+<<>>=
+out$other
+@
+
+For brevity, this processing step is only performed here for one BAM file. Real
+analyses should run this function over a loop for all files as required.
+
+\section{Diagnosing ligation quality}
+
+\subsection{Making strand orientation plots}
+\label{ssec:strorient}
+Some diagnostics can be pulled out of each processed directory using the
+\code{diagnosePET} function. This extracts the strand information for
+inter-chromosomal tag pairs, i.e., those mapped to different chromosomes.  Each
+code refers to the combination of strands to which each pair is mapped, i.e.,
+both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2})
+and both reverse (\code{3}). As you can see, these numbers are fairly balanced
+as ligation between different pieces of DNA can generate any combination of
+strands.
+
+<<>>=
+diag <- diagnosePET(outcoming)
+diag$inter
+@
+
+The function will also collect strand and gap information for intra-chromosomal
+tag pairs. In this case, the ``first'' tag is that which maps at a lower
+position.  This means that a code of \code{1} marks an inward-facing tag pair
+whereas a code of \code{2} marks an outward-facing tag pair. The gap distance
+refers to the distance between tag positions on the same chromosome. The
+distribution of gaps can then be examined for each strand orientation
+\citep{jin2013highres}. The average distribution of codes \code{0} and \code{3}
+is shown as both involve alignment to the same strand.
+
+<<eval=FALSE,label=strorient>>=
+lgap <- log2(diag$gap+1)
+breaks <- seq(min(lgap), max(lgap), length.out=30)
+iwin <- hist(lgap[diag$flag==1L], plot=FALSE, breaks=breaks)
+owin <- hist(lgap[diag$flag==2L], plot=FALSE, breaks=breaks)
+ssin <- hist(lgap[diag$flag==0L | diag$flag==3L], plot=FALSE, breaks=breaks)
+   
+plot(owin$mids, owin$counts/1e6, type="l", xlab=expression(log[2]~"[Gap (bp)]"), 
+    ylab="Frequency (millions)", col="red", lwd=2, cex.lab=1.4, cex.axis=1.2)
+lines(iwin$mids, iwin$counts/1e6, col="darkgreen", lwd=2)
+lines(ssin$mids, ssin$counts/2e6, col="blue", lwd=2)
+legend("topright", c("inward", "outward", "same"), col=c("darkgreen", "red", "blue"), 
+    cex=1.3, lwd=2)
+@
+
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<strorient>>
+@
+\end{center}
+
+The spike in outward-facing tag pairs is consistent with self-ligation events.
+This occurs when a DNA fragment ligates to itself to form a circle. Subsequent
+cleavage and sequencing over the ligation junction can only generate
+outward-facing pairs upon alignment. In contrast, inter-ligation events between
+DNA fragments can generate any of the strand orientation. This explains the
+balance that is observed between the distributions at higher gap sizes.
+
+It's worth pointing out that no skews in strand orientation should exist for
+the AB library. This is because all AB pairs should be formed by inter-ligation
+events. The presence of any self-ligation spikes is probably caused by
+spillover from linker assignment errors. The majority of AB tag pairs are
+inter-chromosomal so the absolute number of spillover pairs is usually
+negligble, regardless of the size of the peak in those plots.
+
+\subsection{Mopping up outward-facing tag pairs}
+Self-ligation events provide no information with respect to interactions
+between DNA fragments. Moreover, they can confound the analysis by masking
+genuine interactions during counting. Any tag pairs corresponding to
+self-ligation events should be removed with the \code{stripOutwardPET}
+function. The spike in the plot above is mostly gone at a gap distance of 25
+kbp, so all outward-facing PETs with lower gap distances will be removed.
+ 
+<<>>=
+stripfile <- paste0(outcoming, "_strip.tsv")
+stripped <- stripOutwardPET(outcoming, min.gap=25000, discard.to=stripfile)
+stripped
+@
+
+This will overwrite the old directory with the stripped results. The return
+value represents the number of tag pairs discarded in this manner. This is
+usually a substantial proportion of all pairs in the directory. Alternatively,
+the stripped  results can be diverted to a new directory if further quality
+control on the original results is desired. The discarded pairs are also routed
+into \code{stripfile} for later use.
+
+\chapter{Counting tag pairs into interactions}
+\label{chap:counting}
+
+\section{Motivation}
+The aim of the analysis is to identify specific interactions. This is achieved
+by comparing the homo-linker count for an interaction with the hetero-linker
+count. The aim is to find those interactions where the homo-linker count is
+significantly greater than the hetero-linker count, given that the latter can
+only be formed from non-specific ligation between complexes. This requires some
+manner of counting tag pairs for each interaction.
+
+The various demonstrations here will use processed tag directories for the full
+MCF7 dataset. Some work is necessary to determine which directories contain the
+hetero-linker counts, and which directories are generated from the same
+library. These vectors of identifiers will be used later to collapse counts for
+each linker combination into homo-/hetero-linker counts for each library.
+
+<<>>=
+curdirs <- c("SRR372741_AA", "SRR372741_AB", "SRR372741_BB",
+             "SRR372742_AA", "SRR372742_AB", "SRR372742_BB")
+is.het <- grepl("AB", curdirs)
+libname <- sub("_[AB]+", "", basename(curdirs))
+data.frame(curdirs, is.het, libname)
+@
+
+\section{Using windows or bins}
+\label{sec:bincount}
+\subsection{Counting wth \code{countPET}}
+The tag pairs must be summarized into counts for interactions prior to the
+statistical analysis. The simplest strategy for doing so is to count tag pairs
+into pairs of bins. Let the genome be partitioned into contiguous and
+non-overlapping bins of equal size. For each pair of bins, the number of tag
+pairs with one tag mapped to each bin can be counted.  This is performed for
+each linker combination in each library such that a set of counts is obtained
+for each bin pair.
+
+<<>>=
+countwidth <- 5000
+actual <-countPET(curdirs, width=countwidth, filter=10)
+head(actual$counts)
+@
+
+The function can also be configured to count tag pairs across pairs of sliding
+windows across the genome. This provides greater spatial resolution than bins
+as optimal counting can be achieved for features that span the boundary of a
+bin. However, it is more laborious and generates overlapping window pairs that
+are difficult to interpret. The gains in resolution are also minor given the
+sparsity of tag pairs throughout the genome-by-genome interaction space.
+
+\subsection{Effects of reverse read extension}
+The strategy described above considers a tag as ``within'' a bin if the $3'$
+end of the tag is contained within the bin. The $3'$ end is more important than
+the $5'$ end as the former marks the end of the sonicated DNA fragment whereas
+the latter just marks the \textit{Mme}I cut site \citep{fullwood2010chiapet}.
+If a bin overlaps a $3'$ end, it means that the bin spans part of the
+immunoprecipitated fragment. In contrast, overlaps to the $5'$ end do not have
+any obvious interpretation. Of course, this makes little practical difference
+given that the length of the tag is only 20 bp.
+
+The gap between two $3'$ ends in an outward-facing read pairs represents the
+interval spanned by the immunoprecipitated DNA fragment. This suggests that the
+location of the peak in the plot of Section~\ref{ssec:strorient} represents the
+average length of the fragments in the chromatin complexes after sonication and
+immunoprecipitation. In this case, the average fragment length is around 1 kbp.
+Each tag can then be extended from its $3'$ end \textit{in the reverse
+direction of the strand} to the average length. Each reverse-extended tag
+represents the putative interval spanned by the original fragment. 
+
+This reverse extension can be performed by setting the \code{ext} parameter to
+the average fragment length in \code{countPET}. Counts are then defined for
+each bin pair as the number of tag pairs where one extended tag overlaps each
+bin. In practice, simply increasing the width of each bin by \code{2*ext} will
+have the same effect. This does not provide strand-specific counting but that
+level of detail is probably unnecessary (see discussions on sparsity below).
+
+\subsection{Choosing an appropriate width}
+The width of each bin is an important parameter during counting. A large
+\code{width} will count more tag pairs and increase detection power in
+downstream testing. This comes at the expense of spatial resolution whereby
+adjacent events can no longer be distinguished. Loss of resolution can be
+damaging as the count for the feature of interest becomes contaminated with
+irrelevant counts from adjacent features. This can dilute or mask significant
+differences between the homo- and hetero-linker counts. 
+
+For most ChIA-PET data, modest overestimation of the width will have little
+effect as the degree of contamination is limited by the sparsity of tags in the
+surrounding interaction space. This argument also justifies the use of a larger
+\code{width} rather than \code{ext}. The only difference between the two
+parameters is that reverse extension is strand-aware whereas the width is not.
+This will not have a major effect on the results due to the aforementioned
+sparsity.  Given that the average fragment length is around 1 kbp, a width of 5
+kbp is used here to ensure that sufficiently large count sizes are obtained.
+
+\subsection{Filtering for computational efficiency} 
+Only bin pairs with a sum of counts across all directories above \code{filter}
+will be retained. A reasonably large filter is necessary to avoid reporting an
+excessive number of uninteresting bin pairs that contain very few tag pairs.
+Otherwise, the downstream analyses will be very computationally intensive for
+little practical gain. Conversely,  the filter  value should not be too high
+lest genuine interactions be discarded. The appropriate choice of filter
+statistic and value is discussed in more depth in Section~\ref{sec:filtering}.
+
+\section{Using peaks}
+
+\subsection{Peak calling from outward-facing pairs}
+An alternative approach is to identify binding sites using peak calling
+programs like MACS \citep{zhang2008macs}. These can be run on the
+outward-facing tag pairs that were previously pruned out of the directory.
+This is equivalent to identifying clusters in the ChIA-PET software tool
+\citep{li2010tool}. Outward-facing pairs are more reliable as the presence of
+both tags at a site indicates that they are more likely to be properly mapped.
+
+\subsection{Pooling to a BED file}
+Here, the outward-facing pairs from all directories are pooled together and
+stored in a BED file. Pooling is recommended as it ensures that a single set of
+peaks can be obtained from the entire dataset. This means that consolidation of
+multiple peak sets is not required. It also increases the number of tags
+involved for sensitive peak calling.
+ 
+<<eval=FALSE>>=
+require(rtracklayer)
+discard.files <- list.files(".", pattern="_strip.tsv$")
+output.file <- "pooled.bed"
+start <- TRUE
+for (x in discardfiles) {
+    current <- read.table(x, stringsAsFactors=FALSE)
+    chosen.strand <- rbinom(nrow(current), 1, 0.5)==1L
+    chosen.pt <- ifelse(chosen.strand, current[,3], current[,2])
+    export(GRanges(current[,1], IRanges(chosen.pt, chosen.pt), strand=chosen.strand),
+        con=output.file, format="bed", append=!start)
+    start <- FALSE
+}
+@
+
+Technically, all libraries should be pooled to maintain statistical
+validity during peak calling:
+\begin{quote}
+Assume there are no self-ligation events. Any outward-facing tag pairs are
+generated from inter-ligation events and will be correlated with the other 
+strand orientations. Peak calling on outward-facing homo-linker tag pairs will
+then select for interactions with large homo-linker counts (based on the other
+orientations). This compromises the independence between peak definition and
+statistical testing.  In particular, interactions are likely to be selected
+that have spurious differences between homo- and hetero-linker counts.
+\end{quote}
+In practice, this is not an issue as self-ligation events should dominate the
+outward-facing tag pairs. This means that only homo-linker directories need to
+be used for peak calling. Relatively few outward-facing tag pairs should be
+present for hetero-linker directories anyway.
+
+The tags themselves are stored as if they were generated from a ChIP-seq
+experiment. For each outward pair, the left tag is mapped to the reverse strand
+for a ChIA-PET experiment, but must be switched to the forward strand to mimic
+a ChIP-seq experiment. The same logic applies for the right tag. Only one tag
+is taken from each fragment to mimic single-end data, given that most
+peak-callers cannot handle paired-end experiments. 
+
+\subsection{Reading peaks and checking widths}
+So, assume that you got your peak-caller to save the results in
+\code{peak.file}. In this case, MACS was called with the command \code{macs14
+-t pooled.bed -f BED -n here -{}-nomodel}. The peaks can then be loaded into a
+\code{GRanges} object after peak calling, as shown below:
+
+<<>>=
+peak.file <- "here_peaks.bed"
+peak.tab <- read.table(peak.file, stringsAsFactors=FALSE)
+peaks <- GRanges(peak.tab[,1], IRanges(peak.tab[,2], peak.tab[,3]))
+peaks
+@
+
+It is a good idea to check the widths of the identified peaks. For some peak
+callers, very small intervals will be identified so it may be necessary to
+expand the width of each peak. In this case, all peaks are expanded to 2 kbp in
+width and any overlapping peaks are merged. This minimum width is justified as
+being twice the (estimated) average fragment length for this dataset.
+
+<<>>=
+summary(width(peaks))
+peaks <- resize(peaks, fix="center", width=pmax(2000, width(peaks)))
+peaks <- reduce(peaks)
+peaks
+@
+
+For each pair of peaks, the number of tag pairs is counted based on the
+presence of the $3'$ end of one tag within each peak interval. This represents
+the number of connections between two binding sites. The counting can be
+performed using the \code{recountPET} function with filtering on the count sum
+as previously described. Reverse read extension can also be done but this is
+probably unnecessary. 
+
+<<>>=
+peaked <- recountPET(curdirs, peaks, filter=20L)
+head(peaked$counts)
+@
+
+\section{Aggregating homo- and hetero-linker counts}
+As previously mentioned, the aim of the analysis is to compare homo- and
+hetero-linker counts. The presence of separate AA and BB counts is redundant
+for this purpose. To simplify the count matrix, the homo-linker counts for each
+library can be added together. This is done with the \code{compressMatrix}
+function for either the binning or peak-based counts. 
+
+<<>>=
+freqs <- compressMatrix(actual, is.het, libname)
+head(freqs$counts)
+@
+
+The total number of tag pairs in each library is also computed. Note that this
+refers to each library rather than each directory, such that each total
+includes tag pairs from all linker combinations. All homo-/hetero-linker counts
+from the same library are assigned the same total. This is appropriate as
+sequencing depth is the same for all counts sourced from the same library.
+Differences in homo-/hetero-linker counts within a library should not be
+attributed to differences in sequencing depth.
+
+<<>>=
+freqs$totals
+@
+
+% More concretely, one can imagine a situation where there are many genuine
+% interactions.  This means that there will be widespread increases in the
+% homo-linker counts relative to the hetero-linker counts. If the total was
+% defined the number of tag pairs for each linker type, the hetero-linker total
+% would be much smaller than the homo-linker total. Normalization would then
+% scale up counts for the former, reducing detection of differences.
+
+\section{Filtering to remove uninteresting features}
+
+\subsection{By distance}
+Local interactions are frequently observed as pairs of the same or adjacent
+regions. These are usually uninteresting as they are inevitable consequences of
+chromatin compaction. The gap distance between the interacting regions can be
+computed with the \code{getDistance} function. This refers to the distance
+between the interacting regions on the same chromosome. 
+
+<<>>=
+gapped <- getDistance(freqs)
+summary(gapped)
+@
+
+Local interactions can then be discarded by putting a minimum threshold on the
+gap. This avoids confounding the results with many genuine yet uninteresting
+local interactions. For the binning strategy, setting a minimum gap of 1 or
+more will select for pairs of bins that are non-adjacent. Any inter-chromosomal
+pairs are marked as \code{NA} and must also be included.
+
+<<>>=
+keep <- gapped > 1 | is.na(gapped)
+freqs$counts <- freqs$counts[keep,]
+freqs$pairs <- freqs$pairs[keep,]
+sum(keep)
+@
+
+% Specifically, you want to avoid kicking out the FDR for the interesting
+% long-range interactions.
+
+\subsection{By abundance}
+\label{sec:filtering}
+Low-abundance interactions are those with low tag pair counts. These do not
+provide enough evidence for rejection of the null hypothesis. They are also
+more likely to represent weak and uninteresting non-specific ligation events.
+Removal of these interactions can improve the sensitivity of the analysis by
+reducing the total number of tests and mitigating the severity of the multiple
+testing correction. Filtering on the average count-per-million (CPM) is
+generally recommended under the NB model.
+
+<<>>=
+require(edgeR)
+a.cpm <- aveLogCPM(freqs$counts, lib.size=freqs$totals)
+summary(a.cpm)
+@
+
+The average count is useful as it is approximately independent of the $p$-value
+for any downstream tests \citep{lun2014denovo}. This ensures that the filtering
+procedure will not affect the validity of the ensuing statistical analysis. Of
+course, some caution is required lest all the interesting interactions be
+removed.  In this case, a relatively mild threshold is used as the bulk of
+filtering has already been performed with \code{filter} during count loading.
+
+<<>>=
+keep <- a.cpm > -1
+freqs$counts <- freqs$counts[keep,]
+freqs$pairs <- freqs$pairs[keep,]
+sum(keep)
+@
+
+A more educated choice of filter threshold can be obtained by identifying
+putative genuine interactions as those that have say, a \code{X}-fold higher
+average abundance than a non-specific interaction. If one assumes that most of
+the interaction space is filled with non-specific contacts, it is simple to
+calculate the threshold based on the abundance of those contacts. 
+
+<<>>=
+X <- 50000
+binsize <- 1e6
+binned <-countPET(curdirs, width=binsize, filter=1)
+rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
+threshold <- median(aveLogCPM(rebin$counts, lib.size=rebin$totals))
+size.adjust <- 2*log2(binsize/countwidth)
+threshold + log2(X) - size.adjust
+@
+
+Note that large bins are required to count  non-specific contacts due to the
+sparsity in the interaction space. This means that some adjustments for size
+are necessary to compare the average non-specific abundance to the average
+abundance of each bin pair of interest.
+
+% You might well ask, why bother doing the testing if you're just going to
+% select for it here? The answer is that this selection doesn't compute
+% p-values. To do so requires some assumptions about the distribution of tags
+% across the interaction space, which may be stronger than desirable (especially
+% when ligation is non-random, so a random distribution isn't appropriate).
+% Also, even though the enrichment looks really strong, you have to consider
+% the effects of multiplicity correction across the entire interaction space.
+% I'm not sure that just saying 'two connecting PETs = interaction" is
+% really good enough, especially given that it could occur for the heteros.
+
+\chapter{Normalizing linker combinations}
+
+\section{Motivation}
+Some normalization is necessary prior to comparisons between homo- and
+hetero-linker counts. This accounts for biases introduced by non-equal
+proportions of each linker as well as non-random ligation. Failure to normalize
+for these effects will result in incorrect conclusions. In particular, the
+nominal expected ratio of homo- to hetero-linker counts is 1:1 in a na\"ive
+comparison. The true expected ratio is often higher, so testing against the
+nominal ratio will result in many false positives.
+
+\section{Diagnosing random ligation}
+
+\subsection{Using the Hardy-Weinberg law for normalization}
+Assume that ligation between DNA fragments is random. Each DNA fragment can be
+treated as a diploid individual where each end represents an allele. Random
+ligation is equivalent to random mating between individuals. Now, assume that
+the proportions of DNA fragments attached to linker A and B are $a$ and $b=1-a$
+respectively. Under the Hardy-Weinberg law, this means that the the proportion
+of AA, AB and BB would be $a^2$, $2ab$ and $b^2$, respectively.
+
+This result is useful as it allows normalization to remove the effects of
+non-equal A and B proportions, i.e., $a\ne b$. Consider a case when $a=0.5b$.
+The expected homo- to hetero-linker ratio would then be 5:4. If you failed to
+consider this effect, you would (incorrectly) expect a ratio of 1:1 for a
+na\"ive comparison.  Any interactions with the true expected ratio would
+deviate from the incorrect ratio, increasing the proportion of false positives. 
+
+This problem can be avoided with normalization. The value of $a$ can be
+determined from the proportion of tags that were attached to linker A. The
+expected proportions for each linker can then be calculated based on the
+Hardy-Weinberg law. These proportions are easily transformed into an expected
+ratio for the homo- and hetero-linker counts. In the example above, the
+expected ratio is 5:4. One could then normalize the data by dividing the
+homo-linker counts by 1.25 prior to any comparison.
+
+\subsection{Checking mitochondrial counts}
+The accuracy of the random ligation model can be assessed for each dataset by
+counting tag pairs mapped between the nuclear and mitochondrial chromosomes.
+The assumption here is that the mitochondrial genome does not interact with the
+nuclear chromosomes. This is fairly reasonable given that they belong to
+separate organelles. Thus, any counts observed here are attributable to
+non-specific (and presumably random) ligation.
+
+<<>>=
+mitocounts <- sapply(curdirs, FUN=function(x) { sum(extractMito(x)) })
+mitocounts
+@
+
+It is fairly obvious that these counts do not follow the predicted
+Hardy-Weinberg proportions. You can also go through the motions with a
+Pearson's chi-squared test to confirm this result. So, does this correspond to
+some fascinating new biology involving inter-organelle interactions? Well,
+probably not. It just means that non-specific ligation is not necessarily
+random.
+
+<<>>=
+lib.1 <- mitocounts[1:3]
+prop.a <- (lib.1[1]*2 + lib.1[2])/sum(lib.1)/2
+expected <- c(prop.a^2, prop.a*(1-prop.a)*2, (1-prop.a)^2)
+expected
+chisq.test(lib.1, p=expected)
+@
+
+\subsection{Checking counts across the interaction space}
+The mitochondrial results can be confirmed with counts from the rest of the
+dataset. Tag pairs are counted into pairs of 10 Mbp bins as described before.
+The assumption here is that most bin pairs contain only non-specific ligation
+events, i.e., most contacts in the interaction space are not specific. This is
+generally reasonable as contacts would not be expected between all pairs of
+binding sites. Again, large bins are necessary to count rare non-specific
+events.
+
+<<>>=
+binned <-countPET(curdirs, width=1e7, filter=1)
+rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
+head(rebin$counts)
+@
+
+The M-value for each interaction is defined as the log-ratio of homo- to
+hetero-linker counts. This is used to construct a MA plot as shown below.  If
+non-specific ligation is random, the expected M-value under the random ligation
+model should be observed (red line). However, the bulk of interactions have a
+substantially higher M-value. This is consistent with the above-expected
+homo-linker counts for the nuclear-mitochondrial ``interactions''. 
+
+<<eval=FALSE,label=plotma>>=
+adj.counts<-cpm(rebin$counts, lib.size=rebin$totals, log=TRUE)
+m <- adj.counts[,1]-adj.counts[,2]
+a <- adj.counts[,1]+adj.counts[,2]
+smoothScatter(x=a, y=m, xlab="A", ylab="M", main=rebin$libname[1], cex.lab=1.4, cex.axis=1.2)
+abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
+@
+
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<plotma>>
+@
+\end{center}
+
+This result supports the notion that non-specific ligation is not equivalent to
+random ligation. At the very least, non-randomness means that the random
+ligation model cannot be used for normalization. At worst, the ligation may be
+so non-random that there are no hetero-linker counts for any meaningful
+comparison. Different datasets may experience differing violations of the
+randomness assumption, so some diagnostics are recommended for quality control.
+
+\section{Normalizing for empirical effects}
+\label{sec:norm}
+Normalization must account for non-equal linker proportions and non-random
+ligation. This can be done empirically by assuming that most interactions are
+non-specific. This means that the average M-value for most interactions can be
+used to define the expected homo-/hetero-linker ratio under the non-specific
+hypothesis. For example, if most interactions have an M-value close to 2, one
+would expect a homo-/hetero-linker ratio of around 4:1. 
+
+Normalization can then be performed to scale the counts according to the
+expected ratio. Specifically, the binned homo-/hetero-linker counts are passed
+into the trimmed mean of M-values (TMM) procedure \citep{oshlack2010tmm}. This
+returns a normalization factor for each set of counts in each library. Counts
+are then (conceptually) divided by the normalization factor, such that a direct
+comparison can be performed between the normalized counts. For example, an
+expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to
+comparison.
+
+<<>>=
+inter.counts <- rebin$counts[is.na(getDistance(rebin)),]
+normfacs <- calcNormFactors(DGEList(inter.counts, lib.size=rebin$totals))$samples$norm.factors
+normfacs
+@
+
+Note that only inter-chromosomal interactions are used in the TMM procedure.
+This weakens the assumption of a non-specific majority as genuine interactions
+between chromosomes are rarer than those within chromosomes. In the MA plot
+above, all inter-chromosomal interactions lie within the main bulk of M-values
+at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at
+M-values of $\sim$7.
+
+\chapter{Assessing biological variability}
+
+\section{Motivation}
+Datasets with biological replicates account for biological variability when
+performing hypothesis testing. This reduces the significance of detected
+features when the data is highly variable. For count-based data, this can be
+achieved using the negative binomial (NB) model in the edgeR package
+\citep{edgeR}.  Estimation of the NB dispersion parameter allows you to model
+the variation between biological replicates. Similarly, estimation of the
+quasi-likelihood (QL) dispersion can be performed to account for
+heteroskedasticity \citep{lund2012ql}. 
+
+Both types of dispersion estimation can be performed using methods in the
+\edgeR{} package.  This requires fitting of a generalized linear model (GLM) to
+the counts for each interaction \citep{mccarthy2012glm}. To this end, the
+choice of design matrix is critical. Multiple designs are available to
+parameterize the combination of homo-/hetero-linker and library. The effect of
+these choices will be discussed in this paragraph. Firstly, it is necessary
+to assemble a \code{DGEList} object for entry into \edgeR{}:
+
+<<>>=
+y <- DGEList(freqs$counts, lib.size=freqs$totals, norm.factors=normfacs)
+@
+
+\section{The paired-sample design}
+The most obvious choice is a paired-sample design, where the homo- and
+hetero-linker counts from a single library are paired together.  The aim is to
+identify differences between the homo- and hetero-linker counts within each
+pair. This design accommodates library-specific effects, i.e., differences in
+the absolute abundance between libraries will not affect the result as long as
+the homo-/hetero-linker count ratio is constant between libraries.
+
+<<>>=
+design.paired <- model.matrix(~factor(freqs$libname) + factor(freqs$hetero))
+design.paired
+@
+
+Estimation can then proceed using the methods in the \edgeR{} package. The
+\code{estimateDisp} function will estimate the NB dispersion whereas the
+\code{glmQLFTest} function will estimate the QL dispersion. In both cases, the
+low number of replicates means that limited information is available to
+estimate the dispersion for each interaction. Thus, an empirical Bayes strategy
+is used to stabilise the estimates by sharing information between interactions.
+This is represented by the estimation of a mean-dispersion trend (for NB) and
+shrinkage of the per-interaction dispersion estimates towards a trend (for QL).
+
+<<label=bcvpaired,eval=FALSE,echo=FALSE>>=
+y.paired <- estimateDisp(y, design.paired)
+plotBCV(y.paired)
+@
+
+<<label=qlpaired,eval=FALSE,echo=FALSE>>=
+result.paired <- glmQLFTest(y.paired, design.paired, robust=TRUE, plot=TRUE)
+@
+
+<<eval=FALSE>>=
+<<bcvpaired>>
+<<qlpaired>>
+@
+
+It is worth pointing out that the biological coefficient of variation is
+defined as the square root of the NB dispersion. This represents the proportion
+of the counts that is attributable to biological variability. The QL dispersion
+is estimated from the GLM deviance and is shown as such, with a quarter-root
+transformation applied for maximum visibility across the range of values.
+
+\setkeys{Gin}{width=0.49\textwidth}
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<bcvpaired>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<qlpaired>>
+@
+\end{center}
+\setkeys{Gin}{width=0.8\textwidth}
+
+For real datasets, the paired-sample design is not effective due to the
+frequency of zeros for the hetero-linker counts. This means that no residual
+degrees of freedom are available for dispersion estimation. Conceptually, you
+can imagine that the paired-sample design measures the variability of the
+homo-/hetero-linker fold change across libraries. Zeros for the hetero-linker
+counts means that the fold-change for each library will be undefined. This
+manifests as zero values for most of the QL dispersions in the plot above.
+
+It may be possible to overcome this problem by adding a prior value onto the
+counts. This will avoid zeros and allow passage through the QL framework.
+However, this is a fairly arbitrary solution as the estimated dispersion will
+depend on the chosen prior. It will also lead to underestimation of the
+dispersion, as the hetero-linker count will become a non-zero constant that
+does not reflect the true variability of the counts.
+
+\section{The one-way design}
+The preferred design for routine ChIA-PET analyses uses a one-way layout. All
+hetero-linker counts are treated as a single group, and all homo-linker counts
+are treated as another group. This means that the NB and QL dispersions can be
+properly estimated from the non-zero homo-linker counts, even when the
+hetero-linker counts are all zero.
+
+<<>>=
+design.group <- model.matrix(~factor(freqs$hetero))
+design.group
+@
+
+Estimation can then be performed as previously described. This approach avoids
+the zero-valued QL dispersions observed for the paired-sample design. Of
+course, the one-way layout assumes that there are no library-specific effects.
+For example, if the absolute count size changed randomly between libraries but
+the homo-/hetero-linker fold change was constant, the dispersions would be
+inflated in the one-way design but not in the paired-sample design.
+
+% (and the homo-/hetero-linker group means would be correlated, which could cause problems in downstream testing)
+
+<<label=bcvgroup,eval=FALSE,echo=FALSE>>=
+y.group <- estimateDisp(y, design.group)
+plotBCV(y.group)
+@
+
+<<label=qlgroup,eval=FALSE,echo=FALSE>>=
+result.group <- glmQLFTest(y.group, design.group, robust=TRUE, plot=TRUE)
+@
+
+<<eval=FALSE>>=
+<<bcvgroup>>
+<<qlgroup>>
+@
+
+\setkeys{Gin}{width=0.49\textwidth}
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<bcvgroup>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<qlgroup>>
+@
+\end{center}
+\setkeys{Gin}{width=0.8\textwidth}
+
+Based on these results, inflation of the NB dispersion is not a problem here.
+In fact, the NB dispersion is exceptionally low given that biological
+replicates are being compared. For most other types of sequencing data (e.g.,
+RNA-seq, ChIP-seq), NB dispersion estimates are usually around 0.01 to 0.1.
+Much lower values are observed here. This is a bit puzzling given that
+ChIA-PET should reflect the variability of ChIP-seq (and then some).
+
+\chapter{Testing for significant interactions}
+
+\section{Using the quasi-likelihood F-test}
+The \code{glmQLFTest} function also performs the F-test for each interaction so
+a new function call is not required. You should, however, make sure that you
+are specifying the contrast matrix correctly. For the one-way layout, the
+coefficient of interest is that corresponding to the homo-/hetero-linker fold
+change. This should be specified through the \code{coef} or \code{contrast} arguments.
+
+<<>>=
+result.group <- glmQLFTest(y.group, design.group, robust=TRUE, coef=2)
+topTags(result.group)
+@
+
+Recall that the null hypothesis is that the (normalized) hetero-linker counts
+are the same as the homo-linker counts. The computed $p$-value represents the
+evidence against the null for each interaction. The log-fold change represents
+the relative increase of the hetero-linker count over the homo-linker count.
+In this case, they are negative for all interactions. This corresponds to an
+increase in the homo-linker count and is consistent with a specific
+interaction.
+
+<<>>=
+summary(result.group$table$logFC)
+@
+
+You may also be wondering why we are not using the likelihood ratio test (LRT).
+Indeed, the LRT is the more obvious test for inferences with GLMs. However, the
+QL F-test is preferred as it accounts for the variability and uncertainty of
+the QL dispersion estimates \citep{lund2012ql}. This means that it can maintain
+type I error control in the presence of heteroskedasticity whereas the LRT does
+not.
+
+\section{Multiplicity correction and the FDR}
+Correction for multiple tests is performed by controlling the false discovery
+rate (FDR) using the Benjamini-Hochberg  method \citep{benjamini1995fdr}. In
+this case, the FDR refers to the proportion of detected interactions that are
+false positives. Control of the FDR is often more appropriate than control of
+the family-wise error rate (i.e., probability of one or more false positives in
+the entire dataset), as it provides a more appropriate compromise between
+specificity and power.
+
+<<>>=
+adj.p <- p.adjust(result.group$table$PValue, method="BH")
+sum(adj.p <= 0.05)
+@
+
+Significantly specific interactions are defined as those that are detected at
+an FDR of 5\%. These can be saved to file as necessary. In practice, all
+interactions should be sorted by the $p$-value and saved to file. This means
+that results can be queried in a flexible manner without needing to re-run the
+entire analysis, e.g., if the FDR threshold is changed.
+
+<<>>=
+ax <- freqs$region[freqs$pairs$anchor]
+tx <- freqs$region[freqs$pairs$target]
+out <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
+    target.chr=seqnames(tx), target.start=start(tx), target.end=end(tx), 
+    result.group$table, FDR=adj.p)
+o <- order(out$PValue)
+write.table(out[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALSE)
+@
+
+\section{Visualization with plaid plots}
+It comes a time that some visualization of interesting results is necessary.
+This can be performed using the \code{plotChIA} function, which constructs a
+plaid plot of the interaction space \citep{lieberman2009hic}. Briefly, each axis
+is a chromosome segment. The box represents an interaction between the
+corresponding points on each axis.  The colour of the box is proportional to
+the number of tag pairs mapped between the interacting loci.
+
+<<label=chia1aa,eval=FALSE,echo=FALSE>>=
+expanded.a <- resize(ax[o[1]], fix="center", width=50000)
+expanded.t <- resize(tx[o[1]], fix="center", width=50000)
+plotChIA(curdirs[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10)
+rect(start(ax[o[1]]), start(tx[o[1]]), end(ax[o[1]]), end(tx[o[1]]))
+abline(0, 1, lty=2)
+@
+
+<<label=chia1ab,eval=FALSE,echo=FALSE>>=
+plotChIA(curdirs[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5)
+abline(0, 1, lty=2)
+@
+
+<<label=chia1bb,eval=FALSE,echo=FALSE>>=
+plotChIA(curdirs[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10)
+abline(0, 1, lty=2)
+@
+
+<<eval=FALSE>>=
+<<chia1aa>>
+<<chia1ab>>
+<<chia1bb>>
+@
+
+Some expansion of the plot boundaries is often desirable. This ensures that the
+context of the interaction can be determined by examining the features in the
+surrounding interaction space. It is also possible to tune the width of the
+boxes through a parameter that is, rather unsurprisingly, named \code{width}.
+The dotted line represents the diagonal around which the plot is symmetric.
+The actual interaction occurs at the center of the plot and is marked by
+a rectangle in the first plot.
+
+\setkeys{Gin}{width=0.32\textwidth}
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<chia1aa>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<chia1ab>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<chia1bb>>
+@
+\end{center}
+
+The \code{cap} value controls the relative scale of the colours. A smaller
+\code{cap} is necessary for the AB track to normalize the intensity, much like
+that discussed in Section~\ref{sec:norm}. In this case, a homo-/hetero-linker
+ratio of 4:1 is expected under the null, so the cap is (10+10):5. This means
+that the AB colours can be directly compared to those of AA and BB. Upon doing
+so, you'll find that the intensity of the homo-linkers is much greater than
+that of the hetero-linkers for this part of the interaction space. This
+suggests that the interaction is specific and genuine. Here's another example 
+in a different colour:
+
+<<label=chia2aa,eval=FALSE,echo=FALSE>>=
+expanded.a <- resize(ax[o[3]], fix="center", width=50000)
+expanded.t <- resize(tx[o[3]], fix="center", width=50000)
+plotChIA(curdirs[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10, col="blue")
+@
+
+<<label=chia2ab,eval=FALSE,echo=FALSE>>=
+plotChIA(curdirs[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5, col="darkgreen")
+@
+
+<<label=chia2bb,eval=FALSE,echo=FALSE>>=
+plotChIA(curdirs[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10, col="black")
+@
+
+<<eval=FALSE>>=
+<<chia2aa>>
+<<chia2ab>>
+<<chia2bb>>
+@
+
+\setkeys{Gin}{width=0.32\textwidth}
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<chia2aa>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<chia2ab>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<chia2bb>>
+@
+\end{center}
+
+Tying this in with gene annotation, ChIP-seq peaks and/or RNA-seq data can then
+suggest some functions for these interactions, e.g., enhancer loops, gene loops,
+gene-gene interactions. Of course, you should always keep in mind the protein that 
+is being targeted. This particular experiment targets RNA polymerase II so 
+most activity will occur at genes and have a transcriptional focus. Other protein
+targets are likely to have different profiles.
+
+\chapter{References and other stuff}
+
+\section{Session Information}
+
+<<>>=
+sessionInfo()
+@
+
+\section{References}
+\bibliography{refchia}
+\bibliographystyle{plainnat}
+\end{document}
