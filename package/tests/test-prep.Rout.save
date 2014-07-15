@@ -1,0 +1,309 @@
+
+R version 3.1.0 (2014-04-10) -- "Spring Dance"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ###################################################################################################
+> # This script is designed to test the pair-identifying capabilities of dacpet, and whether it
+> # saves the results in a proper format.
+> 
+> suppressPackageStartupMessages(require("dacpet"))
+> source("simsam.R")
+> 
+> comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10, 
++ 		yield=max(1L, round(npairs/runif(1, 2, 10)))) {
++ 	rlen<-as.integer(rlen+0.5)
++ 	spacer<-as.integer(spacer+0.5)
++ 
++ 	# Randomly generating reads.
++     names<-paste('x', rep(1:npairs, 2), sep=".");
++     chrs<-sample(length(chromos), length(names), replace=TRUE);
++     pos<-integer(length(names));
++ 
++     # Assigning positions to all of them.
++     for (i in 1:length(chromos)) {
++         current<-chrs==i;
++         pos[current]<-as.integer(round(runif(sum(current), 1, chromos[[i]])))
++     }
++ 
++     # Throwing them into the SAM file generator. 
++     str<-rbinom(length(names), 1, 0.5)==1; 
++     sstr<-rbinom(singles, 1, 0.5)==1; 
++ 	reversi<-c(1:npairs+npairs, 1:npairs)
++     out<-simsam(fname, names(chromos)[chrs], pos, str, chromos, names=names, len=rlen, 
++ 			is.first=c(rep(TRUE, npairs), rep(FALSE, npairs)), is.paired=TRUE,
++ 			mate.chr=names(chromos)[chrs][reversi], mate.pos=pos[reversi], mate.str=str[reversi])
++ 
++ 	if (singles) { 
++ 	    # Adding some singles.
++     	snames<-schrs<-spos<-NULL
++         snames<-paste('y', 1:singles, sep=".");
++         schrs<-sample(length(chromos), singles, replace=TRUE);
++         spos<-integer(singles);
++ 		for (i in 1:length(chromos)) {
++ 	       	scurrent<-schrs==i;
++         	spos[scurrent]<-as.integer(round(runif(sum(scurrent), 1, chromos[i])))
++ 		}
++ 
++     	tempname<-file.path(dir, "temp")
++ 		out2<-simsam(tempname, names(chromos)[schrs], spos, sstr, chromos, names=snames, len=rlen)
++ 		more.temp<-file.path(dir, "temp2")
++ 		out<-mergeBam(c(out, out2), more.temp, indexDestination=TRUE, overwrite=TRUE)
++ 		file.rename(more.temp, out)
++ 	}
++ 
++ 	# Resorting by name.
++ 	temp<-sortBam(out, "temp", byQname=TRUE)
++ 	file.rename(temp, out)
++ 
++ 	################ THEORETICAL MATCH ###################
++ 
++ 	# Actually assembling the theoretical values.
++ 	primary<-1:npairs
++ 	pchrs<-chrs[primary]
++ 	pstr<-str[primary]
++ 	ppos<-pos[primary]
++ 	ppos[pstr]<-ppos[pstr]+rlen-1L
++ 	
++ 	secondary<-npairs+primary
++ 	schrs<-chrs[secondary]
++ 	sstr<-str[secondary]
++ 	spos<-pos[secondary]
++ 	spos[sstr]<-spos[sstr]+rlen-1L
++ 
++ 	modppos<-ifelse(pstr, ppos, -ppos)
++ 	modspos<-ifelse(sstr, spos, -spos)
++ 
++ 	################ ACTUAL MATCH ###################
++ 	# Assembling the output list for comparison.
++ 
++ 	tmpdir<-paste0(fname, "_temp")
++ 	preparePET(out, dir=tmpdir, yield=yield)
++ 	indices<-dacpet:::.loadIndices(tmpdir)
++ 	used<-indices
++ 
++ 	for (i in 1:length(chromos)) {
++ 		for (j in 1:i) {
++ 			stuff<-(chrs[primary]==i & chrs[secondary]==j) | (chrs[primary]==j & chrs[secondary]==i) 
++ 			if (i > j) {
++ 				is.anchor<-pchrs[stuff]==i 
++ 			} else {
++ 				is.anchor<-ppos[stuff] > spos[stuff]
++ 			}
++ 			cur.anchor<-ifelse(is.anchor, modppos[stuff], modspos[stuff])
++ 			cur.target<-ifelse(is.anchor, modspos[stuff], modppos[stuff])
++ 			o<-order(cur.anchor, cur.target)
++ 
++ 			# Checking anchor/target/length/orientation/gap statistics (sorting to ensure comparability).
++ 			achr<-names(chromos)[i]
++ 			tchr<-names(chromos)[j]
++             used[[achr]][[tchr]]<-NULL
++ 			if (!(achr%in%names(indices)) || !(tchr %in% names(indices[[achr]]))) { 
++ 				if (length(o)) { stop("true interactions are missing"); }
++ 				next; 
++ 			}
++ 			current<-read.table(file.path(tmpdir, indices[[achr]][[tchr]]), header=TRUE, colClasses="integer")
++ 			current<-current[order(current$anchor.pos, current$target.pos),]
++ 			if (!identical(current$anchor.pos, cur.anchor[o])) { stop("mismatch in anchor elements") }
++ 			if (!identical(current$target.pos, cur.target[o])) { stop("mismatch in target elements") }
++ 		}
++ 	}
++ 
++ 	# Checking there's nothing left.
++ 	if (!is.null(unlist(used))) { stop("files left unused in the directory") }
++ 	return(head(read.table(file.path(tmpdir, indices[[1]][[1]]), header=TRUE)))
++ }
+> 
+> ####################################################################################################
+> # Initiating testing with something fairly benign.
+> 
+> set.seed(348753485)
+> dir<-"prep-test"
+> dir.create(dir)
+> fname<-file.path(dir, "out");
+> chromos<-c(chrA=20000L, chrB=1000L, chrC=50000L);
+> 
+> comp(fname, npairs=20, chromos=chromos);
+  anchor.pos target.pos
+1      17947       3681
+> comp(fname, npairs=50, chromos=chromos);
+  anchor.pos target.pos
+1     -15133      -6739
+2       2579       -838
+3     -17152      -4714
+4      16183      10063
+5       8225       2935
+6     -15269     -12910
+> comp(fname, npairs=100, chromos=chromos);
+  anchor.pos target.pos
+1      -5388      -3079
+2      12268      -5715
+3      -7090      -3444
+4      19335      -1295
+5      17748      -5272
+6     -18337      17236
+> 
+> # Ramping up the aggression in terms of overlap density
+> 
+> comp(fname, npairs=20, chromos=c(chrA=300));
+  anchor.pos target.pos
+1        114        -45
+2        274       -267
+3        285         47
+4       -251       -119
+5       -299        273
+6        222        180
+> comp(fname, npairs=50, chromos=c(chrA=300));
+  anchor.pos target.pos
+1       -225        103
+2        262        -99
+3        263        233
+4        244        137
+5        166        -14
+6        210       -109
+> comp(fname, npairs=100, chromos=c(chrA=300));
+  anchor.pos target.pos
+1        125       -104
+2        288        151
+3       -202        165
+4       -187         42
+5       -167        122
+6       -277        167
+> 
+> # Increasing the number of reads all round.
+> 
+> comp(fname, npairs=200, chromos=chromos);
+  anchor.pos target.pos
+1      19922     -12711
+2       8244      -7771
+3      -6269      -5386
+4     -16226       -606
+5     -13179       7168
+6       8795      -7924
+> comp(fname, npairs=1000, chromos=chromos);
+  anchor.pos target.pos
+1       8336      -4257
+2      14289      -7751
+3     -19916     -12779
+4     -10360      -6196
+5       9530      -7842
+6      -6554       1274
+> 
+> # Adding some singletons.
+> 
+> comp(fname, npairs=200, chromos=chromos, singles=10)
+  anchor.pos target.pos
+1     -17215       3144
+2      11265      -5412
+3      11300       6593
+4       1735        399
+5      -8494      -6605
+6      15360     -10747
+> comp(fname, npairs=200, chromos=chromos, singles=50)
+  anchor.pos target.pos
+1      -8568       7337
+2     -13733      10884
+3      18853      15570
+4      14644     -12313
+5     -12623       2793
+6     -15778      -1542
+> 
+> # Making the fragments smaller.
+> 
+> comp(fname, npairs=200, rlen=50, chromos=chromos)
+  anchor.pos target.pos
+1       9040      -8311
+2      19478     -11165
+3      16403      -4943
+4      13787       8080
+5     -15726       8544
+6     -17603        569
+> comp(fname, npairs=500, rlen=50, chromos=chromos)
+  anchor.pos target.pos
+1      13588      12861
+2      -7878       2234
+3     -16099        307
+4     -18824      -5466
+5     -11701       6987
+6      18698      13465
+> 
+> # Trying it out with some more elements in a more restricted space.
+> 
+> comp(fname, npairs=500, chromos=c(chrA=20L))
+  anchor.pos target.pos
+1        -20        -15
+2        -10         -6
+3        -20         17
+4         27        -17
+5         24         13
+6         18         11
+> comp(fname, npairs=200, chromos=c(chrA=20L, chrB=10L))
+  anchor.pos target.pos
+1         22         15
+2         -9         -9
+3         19        -15
+4         -9         -8
+5        -17         17
+6         22         19
+> comp(fname, npairs=1000, chromos=c(chrA=10L))
+  anchor.pos target.pos
+1         17         -3
+2         -9         -6
+3         19         -7
+4         11         -8
+5         16         -9
+6         14         -8
+> 
+> # Adding lots of chromosomes.
+> 
+> chromos<-c(chrA=500L, chrB=6000L, chrC=70L, chrD=400L, chrE=3000L, chrF=10L, chrG=200L)
+> comp(fname, npairs=200, chromos=chromos);
+  anchor.pos target.pos
+1        -77         -7
+2       -399        387
+3       -412        359
+4       -362       -300
+> comp(fname, npairs=1000, chromos=chromos);
+  anchor.pos target.pos
+1       -290       -266
+2       -265        -71
+3       -399       -137
+4        367        221
+5         67         18
+6       -284         61
+> comp(fname, npairs=200, chromos=chromos);
+  anchor.pos target.pos
+1        489       -235
+2       -258         91
+3       -497        368
+4       -408       -194
+> comp(fname, npairs=1000, chromos=chromos);
+  anchor.pos target.pos
+1       -307        -14
+2       -187         20
+3        349        167
+4       -424        -90
+5       -214       -105
+6        245        137
+> 
+> ###################################################################################################
+> 
+> unlink(dir, recursive=TRUE)
+> 
+> proc.time()
+   user  system elapsed 
+  5.531   0.110   5.645 

@@ -1,0 +1,412 @@
+
+R version 3.1.0 (2014-04-10) -- "Spring Dance"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # Tests the diagnostic components: diagnosePET, extractMito, stripOutwardPET and mergePET.
+> 
+> suppressPackageStartupMessages(require(dacpet))
+> 	
+> all.chrs <- c(chrA=1000, chrB=2000, chrC=3000, chrM=500)
+> simdir <- function(dirpath, ntags) {
++ 	unlink(list.files(dirpath, full=TRUE))
++ 	offsets <- c(0L, cumsum(all.chrs))
++ 	chosen.alpha <- sample(length(all.chrs), ntags, replace=TRUE)
++ 	chosen.bravo <- sample(length(all.chrs), ntags, replace=TRUE)
++ 	pos.alpha <- as.integer(runif(ntags, 1, all.chrs[chosen.alpha]))
++ 	pos.bravo <- as.integer(runif(ntags, 1, all.chrs[chosen.bravo]))
++ 
++ 	is.anchor <-chosen.alpha > chosen.bravo | (chosen.alpha==chosen.bravo & pos.alpha > pos.bravo)
++ 	anchor.chr <- ifelse(is.anchor, chosen.alpha, chosen.bravo)
++ 	anchor.pos <- sample(c(-1L, 1L), ntags, replace=TRUE)*ifelse(is.anchor, pos.alpha, pos.bravo)
++ 	target.chr <- ifelse(!is.anchor, chosen.alpha, chosen.bravo)
++ 	target.pos <- sample(c(-1L, 1L), ntags, replace=TRUE)*ifelse(!is.anchor, pos.alpha, pos.bravo)
++ 
++ 	out <- split(data.frame(anchor.pos=anchor.pos, target.pos=target.pos), anchor.chr)
++ 	index <- 1L
++ 	for (x in names(out)) { 
++ 		reout <- split(out[[x]], target.chr[as.integer(rownames(out[[x]]))])
++ 		for (y in names(reout)) {
++ 			fname <- paste0(index, ".gz")
++ 			dacpet:::.saveExt(reout[[y]], file.path(dirpath, fname))
++ 			write.table(data.frame(names(all.chrs)[as.integer(x)], names(all.chrs)[as.integer(y)], fname), file=dacpet:::.getIndex(dirpath),
++ 				sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE, append=index!=1L)
++ 			index <- index + 1L
++ 		}	
++ 	}
++ 	write.table(data.frame(chr=names(all.chrs), length=all.chrs), sep="\t", quote=FALSE, row.names=FALSE,
++ 		file=dacpet:::.getLengths(dirpath))
++ 	return(data.frame(anchor.chr=names(all.chrs)[anchor.chr], anchor.pos, target.chr=names(all.chrs)[target.chr], target.pos,
++ 			stringsAsFactors=FALSE))	
++ }
+> 
+> ###########################################################################################################
+> # Testing diagnosePET.
+> 
+> dirpath <- "stuff"
+> dir.create(dirpath)
+> diagcomp <- function(ntags, restrict=NULL) {
++ 	truth <- simdir(dirpath, ntags)
++ 	if (!is.null(restrict)) { truth <- truth[truth$anchor.chr %in% restrict & truth$target.chr %in% restrict,] }
++ 	out <- diagnosePET(dirpath, restrict=restrict)
++ 
++ 	# Checking inters.
++ 	if (out$inter[["0"]]!=sum(truth$anchor.chr!=truth$target.chr & truth$anchor.pos > 0 & truth$target.pos > 0)) { stop("mismatch in both forward interchromosomals") }
++ 	if (out$inter[["1"]]!=sum(truth$anchor.chr!=truth$target.chr & truth$anchor.pos < 0 & truth$target.pos > 0)) { stop("mismatch in inward interchromosomals") }
++ 	if (out$inter[["2"]]!=sum(truth$anchor.chr!=truth$target.chr & truth$anchor.pos > 0 & truth$target.pos < 0)) { stop("mismatch in outward interchromosomals") }
++ 	if (out$inter[["3"]]!=sum(truth$anchor.chr!=truth$target.chr & truth$anchor.pos < 0 & truth$target.pos < 0)) { stop("mismatch in both reverse interchromosomals") }
++ 	
++ 	# Checking gappiness.
++ 	all.gap <- abs(truth$anchor.pos) - abs(truth$target.pos)
++ 	if (!identical(sort(all.gap[truth$anchor.chr==truth$target.chr & truth$anchor.pos > 0 & truth$target.pos > 0]), sort(out$gap[out$flag==0L]))) { stop("mismatch in both forward intrachromosomals") }
++ 	if (!identical(sort(all.gap[truth$anchor.chr==truth$target.chr & truth$anchor.pos < 0 & truth$target.pos > 0]), sort(out$gap[out$flag==1L]))) { stop("mismatch in both forward intrachromosomals") }
++ 	if (!identical(sort(all.gap[truth$anchor.chr==truth$target.chr & truth$anchor.pos > 0 & truth$target.pos < 0]), sort(out$gap[out$flag==2L]))) { stop("mismatch in both forward intrachromosomals") }
++ 	if (!identical(sort(all.gap[truth$anchor.chr==truth$target.chr & truth$anchor.pos < 0 & truth$target.pos < 0]), sort(out$gap[out$flag==3L]))) { stop("mismatch in both forward intrachromosomals") }
++ 
++ 	return(cbind(head(out$gap), head(out$flag)))
++ }
+> 
+> set.seed(234096)
+> diagcomp(1000)
+     [,1] [,2]
+[1,]  371    2
+[2,]  135    1
+[3,]  585    2
+[4,]  499    2
+[5,]  210    1
+[6,]  279    3
+> diagcomp(1000, restrict=c("chrA", "chrB", "chrC"))
+     [,1] [,2]
+[1,]  371    2
+[2,]  604    0
+[3,]  598    3
+[4,]  291    1
+[5,]  129    3
+[6,]   94    1
+> diagcomp(1000, restrict=c("chrA", "chrB"))
+     [,1] [,2]
+[1,]  441    3
+[2,]  343    0
+[3,]  803    1
+[4,]  722    3
+[5,]   34    3
+[6,]  521    0
+> diagcomp(1000, restrict=c("chrA"))
+     [,1] [,2]
+[1,]  249    0
+[2,]  639    2
+[3,]   77    1
+[4,]  185    0
+[5,]  454    3
+[6,]  174    2
+> diagcomp(100)
+     [,1] [,2]
+[1,]  152    0
+[2,]  627    0
+[3,]   77    0
+[4,]  215    1
+[5,]  471    2
+[6,]  760    3
+> diagcomp(100, restrict=c("chrA", "chrB", "chrC"))
+     [,1] [,2]
+[1,]  459    2
+[2,]  705    3
+[3,]   48    2
+[4,]  100    0
+[5,]  513    0
+[6,]  634    3
+> diagcomp(100, restrict=c("chrA", "chrB"))
+     [,1] [,2]
+[1,]  590    1
+[2,]   70    3
+[3,]  345    0
+[4,]  183    0
+[5,]  141    1
+[6,]  219    3
+> diagcomp(100, restrict=c("chrA"))
+     [,1] [,2]
+[1,]   30    3
+[2,]  203    2
+[3,]  123    3
+[4,]  500    1
+[5,]  619    1
+> diagcomp(10)
+     [,1] [,2]
+[1,]  580    0
+[2,]  503    0
+[3,]   40    1
+> diagcomp(10, restrict=c("chrA", "chrB", "chrC"))
+     [,1] [,2]
+> diagcomp(10, restrict=c("chrA", "chrB"))
+     [,1] [,2]
+[1,]  203    1
+> diagcomp(10, restrict=c("chrA"))
+     [,1] [,2]
+[1,]  511    3
+> diagcomp(1)
+     [,1] [,2]
+> diagcomp(1, restrict=c("chrA", "chrB", "chrC"))
+     [,1] [,2]
+[1,] 2596    1
+> diagcomp(1, restrict=c("chrA", "chrB"))
+     [,1] [,2]
+> diagcomp(1, restrict=c("chrA"))
+     [,1] [,2]
+> 
+> ###########################################################################################################
+> # Testing stripOutwardPET.
+> 
+> stripcomp <- function(ntags, out=NULL, min.gap=100, locale=NULL) {
++ 	truth <- simdir(dirpath, ntags)
++ 	stripped <- stripOutwardPET(dirpath, out=out, min.gap=min.gap, discard.to=locale)
++ 	retained <- list()
++ 	
++ 	# Checking output directory.
++ 	if (is.null(out)) { out <- dirpath }
++ 	reported <- read.table(dacpet:::.getIndex(out), stringsAsFactors=FALSE)
++ 	for (x in 1:nrow(reported)) { 
++ 		keep <- truth$anchor.chr==reported[x,1] & truth$target.chr==reported[x,2] 
++ 		current <- truth[keep,]
++ 		lost <- current$anchor.chr==current$target.chr & current$anchor.pos > 0 & current$target.pos < 0 & abs(current$anchor.pos)-abs(current$target.pos) < min.gap
++ 		current <- current[!lost,c(2,4)]
++ 		rownames(current) <- NULL
++ 		blah <- read.table(file.path(out, reported[x,3]), header=TRUE)
++ 		if (!identical(current, blah)) { stop("mismatch after stripping out tags") }
++ 		if (any(lost)) { 
++ 			retained[[x]] <- data.frame(reported[x,1], -truth$target.pos[keep][lost], truth$anchor.pos[keep][lost], stringsAsFactors=FALSE)
++ 		}
++ 	}
++ 	all.lost <- do.call(rbind, retained)
++ 	if (is.null(all.lost)) {
++ 		stopifnot(stripped==0L)
++ 	} else {
++ 		stopifnot(identical(stripped, nrow(all.lost)))
++ 	}
++ 
++ 	# Checking the discard location.
++ 	if (stripped && !is.null(locale)) { 
++ 		o <- do.call(order, all.lost)
++ 		all.lost <- all.lost[o,]
++ 		reported <- read.table(locale, colClasses=list("character", "integer", "integer"), stringsAsFactors=FALSE)
++ 		o <- do.call(order, reported)
++ 		reported <- reported[o,]
++ 		colnames(all.lost) <- colnames(reported) <- c("chr", "start", "end")
++ 		rownames(all.lost) <- rownames(reported) <- NULL
++ 		if (!identical(all.lost, reported)) { stop("mismatch in the discarded tags") }
++ 	} else if (stripped==0L) { 
++ 		out <- tryCatch({
++ 		   read.table(locale)	
++ 		}, error=function(cond) { return(FALSE) })
++ 		if (!is.logical(out)) { stop("non-empty discard list") }
++ 	}
++ 	return(stripped)
++ }
+> 
+> set.seed(8573910)
+> tmpdir <- tempfile(tmpdir=".")
+> discardee <- "whee.tsv" #tempfile(tmpdir=".", fileext=".tsv")
+> 
+> stripcomp(1000, out=NULL, min.gap=100, locale=NULL)
+[1] 6
+> stripcomp(1000, out=tmpdir, min.gap=100, locale=NULL)
+[1] 7
+> unlink(tmpdir, recursive=TRUE)
+> stripcomp(1000, out=NULL, min.gap=100, locale=discardee)
+[1] 13
+> 
+> stripcomp(1000, out=NULL, min.gap=500, locale=NULL)
+[1] 46
+> stripcomp(1000, out=tmpdir, min.gap=500, locale=NULL)
+[1] 38
+> unlink(tmpdir, recursive=TRUE)
+> stripcomp(1000, out=NULL, min.gap=500, locale=discardee)
+[1] 40
+> 
+> stripcomp(1000, out=NULL, min.gap=1000, locale=NULL)
+[1] 42
+> stripcomp(1000, out=tmpdir, min.gap=1000, locale=NULL)
+[1] 59
+> unlink(tmpdir, recursive=TRUE)
+> stripcomp(1000, out=NULL, min.gap=1000, locale=discardee)
+[1] 46
+> 
+> stripcomp(100, out=NULL, min.gap=100, locale=NULL)
+[1] 0
+> stripcomp(100, out=tmpdir, min.gap=100, locale=NULL)
+[1] 0
+> unlink(tmpdir, recursive=TRUE)
+> stripcomp(100, out=NULL, min.gap=100, locale=discardee)
+[1] 3
+> 
+> stripcomp(10, out=NULL, min.gap=1000, locale=NULL)
+[1] 0
+> stripcomp(10, out=tmpdir, min.gap=1000, locale=NULL)
+[1] 0
+> unlink(tmpdir, recursive=TRUE)
+> stripcomp(10, out=NULL, min.gap=1000, locale=discardee)
+[1] 0
+> 
+> ###########################################################################################################
+> # Testing extractMito.
+> 
+> mitocomp <- function(ntags) {
++ 	truth <- simdir(dirpath, ntags)
++ 	collected <- c(truth$anchor.chr[truth$target.chr=="chrM"],
++ 					truth$target.chr[truth$anchor.chr=="chrM" & truth$target.chr!="chrM"])
++ 
++ 	mito <- extractMito(dirpath, self=TRUE)
++ 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x))) { stop("mismatch in mitocounts") } }
++ 
++ 	mito <- extractMito(dirpath, self=TRUE, restrict=c("chrA", "chrB"))
++ 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x))) { stop("mismatch in mitocounts") } }
++ 
++ 	mito <- extractMito(dirpath)
++ 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x & x!="chrM"))) { stop("mismatch in mitocounts") } }
++ 
++ 	return(mito)
++ }
+> 
+> set.seed(475632)
+> mitocomp(1000)
+chrA chrB chrC chrM 
+ 125  111  130    0 
+> mitocomp(1000)
+chrA chrB chrC chrM 
+ 116  117  117    0 
+> mitocomp(100)
+chrA chrB chrC chrM 
+  16   15   13    0 
+> mitocomp(100)
+chrA chrB chrC chrM 
+  16   13    6    0 
+> mitocomp(10)
+chrA chrB chrC chrM 
+   1    1    1    0 
+> mitocomp(10)
+chrA chrB chrC chrM 
+   1    0    1    0 
+> 
+> ###########################################################################################################
+> # Testing mergePET.
+> 
+> altpath <- "second.stuff"
+> finpath <- "final.stuff"
+> dir.create(altpath)
+> mergecomp <- function(ntags1, ntags2) {
++ 	t1 <- simdir(dirpath, ntags1)
++ 	t2 <- simdir(altpath, ntags2)
++ 	mergePET(c(dirpath, altpath), out=finpath)
++ 
++ 	# Checking by ensuring that everyone is present who is meant to be.
++ 	ref <- read.table(dacpet:::.getLengths(dirpath), header=TRUE)
++ 	sec <- read.table(dacpet:::.getLengths(altpath), header=TRUE)
++ 	final <- read.table(dacpet:::.getLengths(finpath), header=TRUE)
++ 	if (!identical(ref, sec) || !identical(ref, final)) { stop("mismatches in the length files") }
++ 	
++ 	# Running through the merged directory, and ensuring everyone is accounted for.
++ 	indices <- read.table(dacpet:::.getIndex(finpath))
++ 	hits1 <- integer(nrow(t1))
++ 	hits2 <- integer(nrow(t2))
++ 	for (x in 1:nrow(indices)) { 
++ 		anchor <- indices[x,1]
++ 		target <- indices[x,2]
++ 		current <- read.table(file.path(finpath, indices[x,3]), header=TRUE)
++ 		current <- current[do.call(order, current),]
++ 
++ 		keep <- t1$anchor.chr==anchor & t1$target.chr==target
++ 		current1 <- t1[keep,c(2,4)]
++ 		hits1[keep] <- hits1[keep] + 1L
++ 		keep <- t2$anchor.chr==anchor & t2$target.chr==target
++ 		current2 <- t2[keep,c(2,4)]
++ 		hits2[keep] <- hits2[keep] + 1L
++ 
++ 		finality <- rbind(current1, current2)
++ 		finality <- finality[do.call(order, finality),]
++ 		rownames(finality) <- rownames(current) <- NULL
++ 		if (!identical(current, finality)) { stop("merged coordinates are inconsistent with originals") }
++ 	}
++ 
++ 	if (!all(hits1==1L) || !all(hits2==1L)) { stop("not all original coordinates used") }
++ 	return(head(t1))
++ }
+> 
+> set.seed(1002)
+> mergecomp(1000, 1000)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrC      -2820       chrB       -436
+2       chrM       -452       chrA        348
+3       chrC      -2272       chrA       -503
+4       chrB       -724       chrA       -988
+5       chrC        336       chrB        133
+6       chrC       2109       chrC       1291
+> mergecomp(1000, 100)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrM        395       chrB       1700
+2       chrA        626       chrA       -195
+3       chrM          1       chrC        234
+4       chrC      -1672       chrB        527
+5       chrC        452       chrC        146
+6       chrM         38       chrC        921
+> mergecomp(1000, 10)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrC      -2673       chrB        598
+2       chrM       -339       chrC      -2402
+3       chrM        231       chrC      -2360
+4       chrM       -332       chrM       -326
+5       chrM       -313       chrA       -835
+6       chrC       -325       chrA       -249
+> mergecomp(1000, 1)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrB        700       chrA        963
+2       chrM       -114       chrC      -2138
+3       chrB        841       chrA        472
+4       chrB      -1836       chrA       -571
+5       chrM       -429       chrM        -43
+6       chrM        139       chrA       -221
+> mergecomp(100, 100)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrM        -73       chrA         56
+2       chrM        276       chrC       -832
+3       chrM        439       chrB      -1479
+4       chrC        601       chrB        532
+5       chrM         51       chrC         50
+6       chrB       1006       chrB        619
+> mergecomp(10, 10)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrM       -333       chrM        -81
+2       chrB        313       chrA        590
+3       chrB      -1089       chrA        574
+4       chrM        -42       chrB      -1820
+5       chrA        692       chrA        -67
+6       chrM       -310       chrB       1612
+> mergecomp(1, 10)
+  anchor.chr anchor.pos target.chr target.pos
+1       chrB       1598       chrB        108
+> 
+> ###########################################################################################################
+> # Cleaning up the mess.
+> 
+> unlink(dirpath, recursive=TRUE)
+> unlink(altpath, recursive=TRUE)
+> unlink(finpath, recursive=TRUE)
+> unlink(discardee)
+> 
+> ###########################################################################################################
+> 
+> proc.time()
+   user  system elapsed 
+  4.550   0.095   4.644 

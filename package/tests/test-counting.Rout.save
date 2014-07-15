@@ -1,0 +1,614 @@
+
+R version 3.1.0 (2014-04-10) -- "Spring Dance"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ###################################################################################################
+> # This tests the interaction counting capabilities of, well, the interaction counter. 
+> 
+> set.seed(1001);
+> suppressPackageStartupMessages(require(dacpet))
+> chromos<-c(chrA=500, chrB=300)
+> 
+> simgen <- function(dir, num) {
++ 	write.table(file=file.path(dir, "lengths.txt"), data.frame(chr=names(chromos), length=chromos), 
++ 			row.names=FALSE, sep="\t", quote=FALSE)
++ 	log<-file.path(dir, "index.txt")
++ 	if (file.exists(log)) { unlink(log) }
++ 	counter<-1L
++ 	for (i in 1:length(chromos)) { 
++ 		max.anchor<-chromos[[i]];
++ 		for (j in 1:i) {
++ 			max.target<-chromos[[j]];
++ 			anchors<-as.integer(floor(runif(num, 1, max.anchor)));
++ 			targets<-as.integer(floor(runif(num, 1, max.target)));
++ 			if (i==j){
++ 				anchor.1<-pmax(anchors, targets);
++ 				target.1<-pmin(anchors, targets);
++ 				anchors<-anchor.1;
++ 				targets<-target.1;
++ 			}
++ 			astr<-rbinom(num, 1, 0.5)==1
++ 			tstr<-rbinom(num, 1, 0.5)==1
++ 			anchors[astr]<--anchors[astr]
++ 			targets[tstr]<--targets[tstr]
++ 
++ 			basic<-paste0(counter, ".gz")
++ 			fname<-file.path(dir, basic)
++ 			write.table(file=fname, data.frame(anchors, targets), row.names=FALSE,
++ 					col.names=c("anchor.pos", "target.pos"), quote=FALSE, sep="\t")
++ 			write.table(file=log, data.frame(names(chromos)[i], names(chromos)[j], basic),
++ 					row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE, append=TRUE)
++ 			counter<-counter+1L
++ 		}
++ 	}
++ 	return(invisible())
++ }
+> 
+> getInterval <- function(pt, ext, left=0, right=0, maxed=NULL) {
++ 	if (pt<0) {
++ 		start<--1L*pt
++ 		end<-start+ext - 1L
++ 	} else {
++ 		end<-pt
++ 		start<-end -ext + 1L
++ 	}
++ 	start<-start-right
++ 	end<-end+left
++ 	start<-pmax(start, 1L)
++ 	if (!is.null(maxed)) { end<-pmin(end, maxed) }
++ 	return(c(start, end))
++ }
+> 
+> # We set up the comparison function to check our results. 
+> 
+> comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
++ 	proposed<-countPET(dirs=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing)# restrict="chrA")
++ 	stopifnot(all(rowSums(proposed$count)[proposed$pair$index] >= filter))
++ 
++ 	# We check whether the regions make sense.
++ 	checker <- list()
++ 	for (i in 1:length(chromos)) {
++ 		spaced<-0:ceiling(chromos[[i]]/spacing)*spacing+1L
++ 		checker[[i]] <- GRanges(names(chromos)[i], IRanges(spaced-left, spaced+right), gunk=spaced)
++ 	}
++ 	suppressWarnings({
++ 		checker <- do.call(c, checker)
++ 		seqlengths(checker) <- chromos
++ 		checker <- trim(checker)
++ 		checker <- checker[width(checker) > 0L]
++ 	})
++ 	space.pts <- split(checker$gunk, as.character(seqnames(checker)))
++ 	last.off <- 0L
++ 	offsets <- list()
++ 	for (i in 1:length(chromos)) { 
++ 		cur.chr <- names(chromos)[i]
++ 		offsets[[cur.chr]] <- last.off
++ 		last.off <- length(space.pts[[cur.chr]]) + last.off
++ 	}
++ 	checker$gunk <- NULL
++ 	if (!identical(checker, proposed$region)) { stop("mismatch in proposed regions") }
++ 	
++ 	# We need to determine who's who.
++ 	x1<-read.table(file.path(dacpet:::.getIndex(dir1)))
++ 	x2<-read.table(file.path(dacpet:::.getIndex(dir2)))
++ 	for (k in 1:length(chromos)) {
++ 		cur.k<-names(chromos)[k]
++ 		for (l in 1:k) {
++ 			cur.l<-names(chromos)[l]
++ 
++ 			# Loading counts.
++ 			x<-list(read.table(file.path(dir1, x1[x1[,1]==cur.k & x1[,2]==cur.l,3]), header=TRUE),
++ 				read.table(file.path(dir2, x2[x2[,1]==cur.k & x2[,2]==cur.l,3]), header=TRUE))
++ 			max.anchor<-chromos[k]
++ 			aspace<-space.pts[[k]]
++ 			aoff<-offsets[[k]]
++ 			max.target<-chromos[l]
++ 			tspace<-space.pts[[l]]
++ 			toff<-offsets[[l]]
++ 
++ 			original<-list()
++ 			other<-0
++ 			for (g in 1:length(x)) {
++ 				mat1<-matrix(0L, nrow=max.anchor+left, ncol=max.target+left) # Need to +left, as 'space.pts' can exceed chromosome length.
++ 				for (i in 1:nrow(x[[g]])) {
++ 					arange<-getInterval(x[[g]][i,1], ext, left=left, right=right, maxed=max.anchor+left)
++ 					if (arange[2] < arange[1]) { next }
++ 					arange<-arange[1]:arange[2] 
++ 					trange<-getInterval(x[[g]][i,2], ext, left=left, right=right, maxed=max.target+left)
++ 					if (trange[2] < trange[1]) { next }
++ 					trange<-trange[1]:trange[2]
++ 
++ 					if (k!=l) {
++ 						mat1[arange,trange]<-mat1[arange,trange]+1L
++ 					} else {
++ 						# Reflecting around the diagonal for intra-chromosomals.
++ 						collected <- unique(c(outer((arange-1L)*nrow(mat1), trange, FUN="+"), 
++ 											outer((trange-1L)*nrow(mat1), arange, FUN="+")))
++ 						mat1[collected] <- mat1[collected] + 1L
++ 					}
++ 				}
++ 				submat1<-mat1[aspace,tspace]
++ 				if (k==l) { submat1[upper.tri(submat1)] <- 0L }
++ 				original[[g]]<-submat1
++ 
++ 				# Subtracting off the elements that we know.
++ 				wascovered<-matrix(FALSE, nrow(submat1), ncol(submat1))
++ 				keep<-as.logical(seqnames(proposed$region[proposed$pair$anchor])==cur.k & 
++ 						seqnames(proposed$region[proposed$pair$target])==cur.l)
++ 				if (any(keep)){ 
++ 					kept<-proposed$pairs[keep,,drop=FALSE]
++ 					kept.counts <- proposed$counts[keep,,drop=FALSE]
++ 					for (i in 1:nrow(kept)) {
++ 						arange<-kept$anchor[i] - aoff
++ 						trange<-kept$target[i] - toff
++  			   			submat1[arange,trange]<-submat1[arange,trange]-kept.counts[i,g] 
++ 						if (any(wascovered[arange,trange])) { stop("overlapping boxes reported in output") }
++ 						wascovered[arange,trange]<-TRUE
++ 						
++ 						if (any(submat1[arange,trange]<0L)) {
++ 							stop("additional counts present in the proposed set which are not in the truth") 
++ 						}
++ 					}
++ 				}
++ 				other<-other+submat1
++ 			}
++ 			stopifnot(all(other < filter))  # Checks for any rows above the filter in the truth that are not in the proposed.
++ 		}
++ 	}
++ 	return(head(proposed$pairs))
++ }
+> 
+> ###################################################################################################
+> # Checking a vanilla count.
+> 
+> dir1<-"temp.out.1"
+> dir2<-"temp.out.2"
+> dir.create(dir1)
+> dir.create(dir2)
+> 
+> simgen(dir1, 20)
+> simgen(dir2, 10)
+> comp(dir1, dir2, ext=10)
+  anchor target
+1     10      5
+2     13      5
+3     15      8
+4     21     20
+5     23     14
+6     23     21
+> comp(dir1, dir2, ext=10, left=9)
+  anchor target
+1     10      5
+2     10      6
+3     13      5
+4     14      5
+5     15      8
+6     15      9
+> comp(dir1, dir2, ext=10, right=25)
+  anchor target
+1      7      2
+2      7      3
+3      7      4
+4      7      5
+5      8      2
+6      8      3
+> comp(dir1, dir2, ext=10, spacing=23)
+  anchor target
+1      7      4
+2     11      1
+3     13      2
+4     17      9
+5     21      7
+6     22      9
+> comp(dir1, dir2, ext=10, filter=2)
+  anchor target
+1     79     54
+> comp(dir1, dir2, ext=10, filter=5)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=55)
+  anchor target
+1      5      1
+2      5      2
+3      5      3
+4      5      4
+5      5      5
+6      6      1
+> comp(dir1, dir2, ext=55, left=15, spacing=30)
+  anchor target
+1      3      1
+2      3      2
+3      4      1
+4      4      2
+5      5      1
+6      5      2
+> comp(dir1, dir2, ext=55, right=25)
+  anchor target
+1      3      1
+2      3      2
+3      3      3
+4      4      1
+5      4      2
+6      4      3
+> comp(dir1, dir2, ext=55, spacing=46)
+  anchor target
+1      2      1
+2      3      1
+3      4      2
+4      5      2
+5      5      1
+6      6      1
+> comp(dir1, dir2, ext=55, filter=5)
+  anchor target
+1     65     54
+2     65     55
+3     66     54
+4     66     55
+5     66     56
+6     67     54
+> comp(dir1, dir2, ext=55, filter=20)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> 
+> # Throwing more sequences in.
+> simgen(dir1, 50)
+> simgen(dir2, 30)
+> comp(dir1, dir2, ext=10)
+  anchor target
+1      6      3
+2      7      2
+3     11      1
+4     11      2
+5     12      6
+6     17      3
+> comp(dir1, dir2, ext=10, left=12, spacing=20)
+  anchor target
+1      4      2
+2      6      1
+3      6      2
+4      7      2
+5      7      4
+6      9      2
+> comp(dir1, dir2, ext=10, right=15)
+  anchor target
+1      4      1
+2      4      2
+3      4      3
+4      5      1
+5      5      2
+6      6      1
+> comp(dir1, dir2, ext=10, spacing=13)
+  anchor target
+1      9      1
+2      9      2
+3      9      5
+4     13      3
+5     15     12
+6     15     15
+> comp(dir1, dir2, ext=10, filter=5)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=10, filter=10)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=55)
+  anchor target
+1      2      1
+2      3      1
+3      4      1
+4      5      1
+5      2      2
+6      3      2
+> comp(dir1, dir2, ext=55, left=35, spacing=50)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      3      3
+6      4      1
+> comp(dir1, dir2, ext=55, right=45)
+  anchor target
+1      1      1
+2      2      1
+3      3      1
+4      4      1
+5      5      1
+6      6      1
+> comp(dir1, dir2, ext=55, spacing=36)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      4      1
+6      4      2
+> comp(dir1, dir2, ext=55, filter=15)
+  anchor target
+1     66     62
+2     67     62
+> comp(dir1, dir2, ext=55, filter=30)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> 
+> # Throwing a ridiculous number of sequences in.
+> simgen(dir1, 100)
+> simgen(dir2, 200)
+> comp(dir1, dir2, ext=10)
+  anchor target
+1      3      1
+2      6      4
+3      7      4
+4      7      5
+5      8      3
+6      8      4
+> comp(dir1, dir2, ext=10, left=12, spacing=13)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      5      3
+6      5      4
+> comp(dir1, dir2, ext=10, right=15)
+  anchor target
+1      1      1
+2      2      1
+3      3      1
+4      5      3
+5      5      4
+6      6      2
+> comp(dir1, dir2, ext=10, spacing=13)
+  anchor target
+1      2      1
+2      5      3
+3      6      3
+4      6      4
+5      7      1
+6      7      3
+> comp(dir1, dir2, ext=10, filter=5)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=10, filter=10)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=55)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      3      3
+6      4      2
+> comp(dir1, dir2, ext=55, left=35, spacing=38)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      3      3
+6      4      1
+> comp(dir1, dir2, ext=55, right=45)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> comp(dir1, dir2, ext=55, spacing=36)
+  anchor target
+1      2      1
+2      2      2
+3      3      1
+4      3      2
+5      3      3
+6      4      1
+> comp(dir1, dir2, ext=55, filter=15)
+  anchor target
+1     41     33
+2     42     30
+3     42     32
+4     42     33
+5     43     30
+6     43     31
+> comp(dir1, dir2, ext=55, filter=30)
+  anchor target
+1     69     62
+> 
+> # Easing off the pedal, and fiddling with some parameters
+> simgen(dir1, 10)
+> simgen(dir2, 20)
+> comp(dir1, dir2, ext=20)
+  anchor target
+1      8      7
+2      8      8
+3      9      7
+4      9      8
+5     10      8
+6     10      9
+> comp(dir1, dir2, ext=23, left=12, spacing=29)
+  anchor target
+1      4      3
+2      4      4
+3      6      3
+4      8      2
+5      7      5
+6      8      5
+> comp(dir1, dir2, ext=23, right=17)
+  anchor target
+1      6      5
+2      6      6
+3      7      5
+4      7      6
+5      7      7
+6      8      5
+> comp(dir1, dir2, ext=23, spacing=18)
+  anchor target
+1      5      5
+2      6      5
+3      9      4
+4     11      7
+5     12      3
+6     14      1
+> comp(dir1, dir2, ext=23, filter=2)
+  anchor target
+1      9      8
+2     31     21
+3     37     35
+4     38     35
+5     38     36
+6     38     37
+> comp(dir1, dir2, ext=20, filter=5)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=41)
+  anchor target
+1      6      5
+2      6      6
+3      7      5
+4      7      6
+5      7      7
+6      8      5
+> comp(dir1, dir2, ext=41, left=9)
+  anchor target
+1      6      5
+2      6      6
+3      7      5
+4      7      6
+5      7      7
+6      8      5
+> comp(dir1, dir2, ext=41, right=58)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> comp(dir1, dir2, ext=41, spacing=26)
+  anchor target
+1      3      3
+2      4      3
+3      4      4
+4      6      2
+5      6      3
+6      7      2
+> comp(dir1, dir2, ext=41, filter=3)
+  anchor target
+1     31     21
+2     31     22
+3     38     35
+4     38     36
+5     38     37
+6     39     34
+> comp(dir1, dir2, ext=41, filter=10)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> 
+> # Throwing another ridiculous number of sequences in.
+> simgen(dir1, 100)
+> simgen(dir2, 200)
+> comp(dir1, dir2, ext=10, left=8, right=-5)
+  anchor target
+1      4      1
+2      4      2
+3      4      3
+4      4      4
+5      5      1
+6      5      2
+> comp(dir1, dir2, ext=10, left=12, spacing=13, right=-10)
+  anchor target
+1      3      3
+2      4      1
+3      4      2
+4      5      2
+5      5      4
+6      7      1
+> comp(dir1, dir2, ext=10, right=-5, left=8)
+  anchor target
+1      4      1
+2      4      2
+3      4      3
+4      4      4
+5      5      1
+6      5      2
+> comp(dir1, dir2, ext=10, spacing=13, left=5, right=-2)
+  anchor target
+1      3      1
+2      3      3
+3      4      1
+4      4      3
+5      5      2
+6      6      1
+> comp(dir1, dir2, ext=10, filter=5, left=8, right=-1)
+  anchor target
+1     55     49
+2     58     38
+3     55     53
+4     55     54
+5     56     53
+6     56     54
+> comp(dir1, dir2, ext=10, filter=10, left=8, right=-1)
+[1] anchor target
+<0 rows> (or 0-length row.names)
+> comp(dir1, dir2, ext=55, left=6, right=-3)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> comp(dir1, dir2, ext=55, left=35, spacing=40, right=-35)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> comp(dir1, dir2, ext=55, right=-5, left=5, spacing=20)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> comp(dir1, dir2, ext=55, spacing=36, left=10, right=-10)
+  anchor target
+1      1      1
+2      2      1
+3      2      2
+4      3      1
+5      3      2
+6      3      3
+> 
+> ##################################################################################################
+> # Cleaning up.
+> 
+> unlink(dir1, recursive=TRUE)
+> unlink(dir2, recursive=TRUE)
+> 
+> ##################################################################################################
+> # End.
+> 
+> proc.time()
+   user  system elapsed 
+ 68.852   0.426  69.431 

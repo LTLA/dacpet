@@ -1,0 +1,224 @@
+
+R version 3.1.0 (2014-04-10) -- "Spring Dance"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # This script tests the decompression capabilities of 'decompressMatrix'.
+> 
+> suppressPackageStartupMessages(require(dacpet))
+> 
+> comp <- function(nlibs=3, ndirs=10) {
++ 	# Generates something like data out of countPET.
++ 	data <- list()
++ 	cur.lib <- as.character(sample(nlibs, ndirs, replace=TRUE))
++ 	cur.het <- rbinom(ndirs, 1, 0.5)==1L 
++ 	npairs <- 1000
++ 	data$counts <- matrix(as.integer(runif(npairs*ndirs,0, 10)), ncol=ndirs, nrow=npairs)
++ 	data$totals <- as.integer(runif(ndirs, 1000, 1500))
++ 	
++ 	my.chrA <- sample(2, npairs, replace=TRUE)
++ 	my.chrT <- sample(2, npairs, replace=TRUE)
++ 	clen <- 50L
++ 	as <- as.integer(runif(npairs, 1L, clen+0.99)) + ifelse(my.chrA==1L, 0L, clen)
++ 	ts <- as.integer(runif(npairs, 1L, clen+0.99)) + ifelse(my.chrT==1L, 0L, clen)
++ 	data$pairs <- data.frame(anchor=as, target=ts)
++ 	range.start <- c(1:clen, 1:clen)
++ 	data$region <- GRanges(rep(c("chrA", "chrB"), c(clen, clen)), IRanges(range.start, range.start+10L))
++ 
++ 	# Basic decompression. 
++    	proposed <- compressMatrix(data, libname=cur.lib, hetero=cur.het)
++ 	temp <- proposed$counts
++ 	totes <- proposed$totals
++ 	for (d in 1:ndirs) {
++ 		chosen <- cur.het[d]==proposed$hetero & cur.lib[d]==proposed$libname
++ 		if (sum(chosen)!=1L) { stop("multiple matches not valid") }
++ 		temp[,chosen] <- temp[,chosen] - data$counts[,d]
++ 		chosen <- cur.lib[d]==proposed$libname
++ 		totes[chosen] <- totes[chosen] - data$totals[d]
++ 	}
++ 	if (any(temp!=0L)) { stop("mismatch in accumulated counts") }
++ 	if (any(totes!=0L)) { stop("mismatch in accumulated totals") }
++ 
++ 	return(head(proposed$counts))
++ }
+> 
+> ####################################################################################
+> # Actually running it.
+> 
+> set.seed(489176)
+> 
+> comp(3, 5)
+     1hom 1het 2hom 3hom 3het
+[1,]    3    7    5    4    7
+[2,]    4    5    6    9    7
+[3,]    8    1    3    9    4
+[4,]    6    3    0    3    3
+[5,]    9    1    4    7    6
+[6,]    2    1    9    3    9
+> comp(3, 10)
+     1hom 1het 2hom 2het 3hom
+[1,]    6    5   13   14    7
+[2,]    7   27   16    3    8
+[3,]    9    9   13    5    3
+[4,]    3   18    8    4    6
+[5,]    0   24   15    6    9
+[6,]    4   18   16   13    9
+> comp(3, 10)
+     1hom 1het 2hom 3hom 3het
+[1,]    4    5   17    7    0
+[2,]    5   12   16    9    4
+[3,]    5    8   17    9    5
+[4,]   14    9    3   17    4
+[5,]   18   12   17    9    6
+[6,]    1    1   13    4    4
+> comp(3, 10)
+     1hom 1het 2hom 2het 3hom 3het
+[1,]    8   12   12   11    6    0
+[2,]    7    8    9    4    6    0
+[3,]    2    8    8    9    4    7
+[4,]    2    8    9    3    4    9
+[5,]    4   13   15   11    6    4
+[6,]    7   16    9    6    1    2
+> comp(4, 8)
+     1hom 1het 2hom 3hom 3het
+[1,]    9    3    9    4    4
+[2,]   18    4    9    7    5
+[3,]   11    0   14    8   11
+[4,]    3    7    5    9   11
+[5,]    8    3    2    0   16
+[6,]    9    0   17    4   14
+> comp(4, 5)
+     2hom 3hom 3het
+[1,]    1    1   11
+[2,]    2    8   11
+[3,]    7    8   15
+[4,]    1    2   12
+[5,]    0    8   20
+[6,]    5    2   11
+> comp(2, 2)
+     1hom 2hom
+[1,]    3    4
+[2,]    6    1
+[3,]    6    4
+[4,]    6    4
+[5,]    0    9
+[6,]    3    5
+> comp(1, 2)
+     1het
+[1,]   17
+[2,]    9
+[3,]    6
+[4,]   11
+[5,]   12
+[6,]    9
+> comp(1, 2)
+     1het
+[1,]    7
+[2,]   14
+[3,]   11
+[4,]    3
+[5,]    6
+[6,]    9
+> comp(1, 1)
+     1het
+[1,]    2
+[2,]    2
+[3,]    0
+[4,]    5
+[5,]    2
+[6,]    4
+> 
+> comp(5, 5)
+     3het 4het
+[1,]   14    5
+[2,]   23    4
+[3,]   22    7
+[4,]   28    3
+[5,]   20    5
+[6,]   21    1
+> comp(5, 10)
+     1hom 1het 2hom 2het 3hom 3het 4hom
+[1,]    7    4    0    6    3    7    2
+[2,]    2   17   11    0    9   10    0
+[3,]    3   10   17    1    6   10    6
+[4,]    9   11    3    0    0   10    8
+[5,]    8   15    8    6    9   12    4
+[6,]    3   13   12    6    8    5    6
+> comp(5, 10)
+     1hom 2hom 2het 3het 4hom 5het
+[1,]    5    5    3    0    9    3
+[2,]   11    7    9    4   15    6
+[3,]    9    5   13    4    8    9
+[4,]   13    8    6    8   11    9
+[5,]    5    8   11    7   21    4
+[6,]    8    8    5    0    5    2
+> comp(5, 10)
+     1het 3het 4het 5hom
+[1,]    7   22    2   22
+[2,]    3   12    4   21
+[3,]    3    9    1   20
+[4,]    3   18    3    8
+[5,]    4    8    5   29
+[6,]    2   25    1   23
+> comp(5, 8)
+     1het 2het 3hom 4hom 4het 5hom
+[1,]    0   21    7    4    4    2
+[2,]    6    5    6    5    4    9
+[3,]    1   10    0    3    9    4
+[4,]    3   12    9    6    8    2
+[5,]    1   20    4    4    0    8
+[6,]    0   12    3    4    1    7
+> comp(5, 5)
+     1hom 1het 3het 5hom
+[1,]    5    1    6   12
+[2,]    9    5    7    6
+[3,]    3    8    2   14
+[4,]    4    7    0    9
+[5,]    3    5    3   17
+[6,]    2    6    7    9
+> comp(5, 2)
+     1hom 4het
+[1,]    4    7
+[2,]    2    6
+[3,]    9    1
+[4,]    0    6
+[5,]    5    4
+[6,]    3    2
+> comp(5, 2)
+     5hom
+[1,]    8
+[2,]    8
+[3,]    6
+[4,]    2
+[5,]    8
+[6,]   13
+> comp(5, 1)
+     4hom
+[1,]    4
+[2,]    5
+[3,]    1
+[4,]    6
+[5,]    6
+[6,]    6
+> 
+> ####################################################################################
+> # End.
+> 
+> 
+> proc.time()
+   user  system elapsed 
+  3.381   0.051   3.429 

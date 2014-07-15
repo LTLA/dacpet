@@ -1,0 +1,12 @@
+#  Calling the dynamic library.
+useDynLib(dacpet, .registration=TRUE, .fixes="cxx_")
+
+#  All functions exported other than those starting with "."
+export(splitLinkers, preparePET, mergePET,
+	stripOutwardPET, diagnosePET, extractMito,
+	countPET, recountPET, 
+	compressMatrix, getDistance,
+	plotChIA)
+
+#  Requires the Rsamtools and GenomicRanges packages.
+import(Rsamtools,GenomicRanges)
