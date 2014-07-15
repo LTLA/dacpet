@@ -8,5 +8,5 @@ Depends: R (>= 3.1.0), GenomicRanges
 Imports: Rsamtools
 Suggests: edgeR
 biocViews: Bioinformatics, HighThroughputSequencing, ChIA-PET
-Description: Tests for differentially enriched interactions across conditions in a ChIA-PET experiment
+Description: Tests for significantly specific interactions in a ChIA-PET experiment, by exploiting homo- and hetero-linker information. Methods are also provided for linker processing and normalization.
 License: GPL-3
