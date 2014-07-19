@@ -1,5 +1,5 @@
 splitLinkers <- function(fastq1, fastq2, linkerA, linkerB, 
-    min.score=10, start=-1, prefix="out", read.prefix=NULL)
+    min.score=10, start=NA, prefix="out", read.prefix=NULL)
 # This function takes a couple of FASTQ files and pulls the linker
 # out from them. It then stores the tags in files starting with
 # 'prefix'. Linker identification is performed with SW alignment,

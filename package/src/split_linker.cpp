@@ -126,7 +126,7 @@ SEXP split_linkers(SEXP file1, SEXP file2, SEXP linkerA, SEXP linkerB,
 		} else {
 			if (counter==1) {
 				// Taking the last subsequence and assuming it's the linker.
-				if (startpos<0) { 
+				if (startpos==NA_INTEGER) { 
 					sA1 = line1.length() - nA;
 					sB1 = line1.length() - nB;
 					sA2 = line2.length() - nA;
