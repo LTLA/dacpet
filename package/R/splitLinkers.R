@@ -6,7 +6,7 @@ splitLinkers <- function(fastq1, fastq2, linkerA, linkerB,
 # starting from 'start' and with a minimum score.
 {
 	min.score <- as.integer(min.score)
-	start <- as.integer(start)
+	start <- as.integer(start) - 1L
 	read.prefix <- as.character(read.prefix)
 
 	# Splitting, as requested.

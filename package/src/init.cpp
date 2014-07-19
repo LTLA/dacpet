@@ -12,9 +12,11 @@ static const R_CallMethodDef all_call_entries[] = {
 	{"count_all_pairs", (DL_FUNC) &count_all_pairs, 5},
 	{"aggregate_pair_counts", (DL_FUNC) &aggregate_pair_counts, 2},
 	{"split_linkers", (DL_FUNC) &split_linkers, 8},
-
+	
 	{"create_counts", (DL_FUNC) &create_counts, 1},
 	{"get_counts", (DL_FUNC) &get_counts, 1},
+	
+	{"test_align", (DL_FUNC) &test_align, 6},
   	{NULL, NULL, 0}
 };
 

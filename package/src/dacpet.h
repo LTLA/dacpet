@@ -27,6 +27,9 @@ SEXP aggregate_pair_counts (SEXP, SEXP);
 SEXP split_linkers(SEXP, SEXP, SEXP, SEXP, 
 				SEXP, SEXP, SEXP, SEXP);
 
+SEXP test_align(SEXP, SEXP, 
+			SEXP, SEXP, SEXP, SEXP);
+
 }
 
 #endif

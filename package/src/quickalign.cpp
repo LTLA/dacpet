@@ -1,5 +1,5 @@
 #include "quickalign.h"
-//#define DEBUG
+//#define DEBUG 1
 
 #ifdef DEBUG
 #include <iostream>
@@ -23,9 +23,9 @@ encoder::encoder(const char* x) : target(x), curstart(0), curcode(0), mult(1) {
 	for (int i=0; i<WORDSIZE; ++i) { 
 		if (x[i]=='\0') { throw std::runtime_error("supplied string is less than the specified word size"); }
 		curcode+=encode(x[i])*mult;
-		mult*=2;
+		mult*=4;
 	}
-	mult/=2;
+	mult/=4;
 	return;
 }
 
@@ -37,7 +37,7 @@ int encoder::advance () {
 	const char& current=target[curstart+WORDSIZE];
 	if (current=='\0') { return 0; }
 	curcode -= encode(target[curstart]);
-	curcode /= 2;
+	curcode /= 4;
 	curcode += encode(current) * mult;
 	++curstart;
 	return 1;
@@ -52,7 +52,7 @@ int encoder::encode (const char x) {
 		case 'G': case 'g':
 			return 2;
 		case 'T': case 't':
-			return 4;
+			return 3;
 		default:
 			throw std::runtime_error("invalid character requested"); 
 	}
@@ -144,7 +144,7 @@ int quickalign::score_incoming(const char* target) {
 
 	// Performs SW alignment on either end. 
 	int actual_matchlen=WORDSIZE+matchlen-1;
-	int base_score=actual_matchlen;
+	int base_score=actual_matchlen*matched;
 	base_score += semilocal(refstart + actual_matchlen, reflen, target, incstart + actual_matchlen, inclen, true, false);
 	base_score += semilocal(0, refstart, target, 0, incstart, false, true);
 
@@ -174,6 +174,10 @@ int quickalign::semilocal(int rstart, int rend,
 		return 0; 
 	}
 
+#ifdef DEBUG
+	std::cout << "Forcing left " << force_left << " and right " << force_right << std::endl;
+#endif
+
 	/* Initializing starting values for those that need them. Imagine these
  	 * guys as the '-1' column of the DP matrix. Technically, old_inc_opened
  	 * shouldn't exist as it's impossible to have a opened gap before the start
@@ -184,8 +188,8 @@ int quickalign::semilocal(int rstart, int rend,
 		old_score[0] = gapopen;
 		old_inc_opened[0] = 2*gapopen - gapext;
 		for (int j=1; j<nref; ++j) {
-			old_score[j] += gapext;
-			old_inc_opened[j] += gapext;
+			old_score[j] = old_score[j-1]+gapext;
+			old_inc_opened[j] = old_inc_opened[j-1]+gapext;
 		}
 	} else {
 		old_score[0] = 0;
@@ -196,6 +200,14 @@ int quickalign::semilocal(int rstart, int rend,
 		}
 		ref_opened[0] = gapopen; // Ignoring gaps on the incoming sequence (this is constant across the incoming sequence).
 	}
+
+#ifdef DEBUG
+	std::cout << "Old starts are:" << std::endl;
+	for (int j=0; j <nref; ++j) { 
+			std::cout << old_score[j] << "/" << old_inc_opened[j] <<"\t";
+	}
+	std::cout << "\n" << std::endl;
+#endif
 	
 	/* If force_right is used, maxscore won't be, so don't worry about it.
 	 * If force_right is not used, then it's impossible to get a negative
@@ -217,8 +229,7 @@ int quickalign::semilocal(int rstart, int rend,
 		inc_opened[0] = std::max(old_inc_opened[0] + gapext, old_score[0] + gapopen);
 		if (force_left) {
 			ref_opened[0] = gapopen*2 + gapext*i; // Manhattan traversal onto the mat.
-			primary_score[0] = std::max((incbase==reference[rstart] ? matched : mismatch)
-					+ (i!=0 ? gapopen + gapext * (i-1) : 0), // Corner is zero value, otherwise, indel.
+			primary_score[0] = std::max((incbase==reference[rstart] ? matched : mismatch) + (i!=0 ? gapopen + gapext * (i-1) : 0), // Corner is zero value, otherwise, indel.
 					std::max(ref_opened[0], inc_opened[0]));
 		} else {
 			primary_score[0] = std::max((incbase==reference[rstart] ? matched : mismatch),
@@ -234,8 +245,8 @@ int quickalign::semilocal(int rstart, int rend,
 		for (int j=1; j<nref; ++j) {
 			ref_opened[j]=std::max(ref_opened[j-1] + gapext, primary_score[j-1] + gapopen);
 			inc_opened[j]=std::max(old_inc_opened[j] + gapext, old_score[j] + gapopen);
-			primary_score[j]=std::max((incbase==reference[rstart+j] ? matched : mismatch) 
-				+ old_score[j-1], std::max(ref_opened[j], inc_opened[j]));
+			primary_score[j]=std::max((incbase==reference[rstart+j] ? matched : mismatch) + old_score[j-1], 
+					std::max(ref_opened[j], inc_opened[j]));
 
 			if (!force_left && primary_score[j] < 0) { primary_score[j]=0; }
 			if (!force_right && primary_score[j] > maxscore) { maxscore=primary_score[j]; }

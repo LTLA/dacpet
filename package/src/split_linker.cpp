@@ -61,11 +61,11 @@ SEXP split_linkers(SEXP file1, SEXP file2, SEXP linkerA, SEXP linkerB,
 	const char* newprefix=NULL;
 	if (Rf_isString(readfix) && LENGTH(readfix)==1) { 
 		newprefix=CHAR(STRING_ELT(readfix, 0));
-	} else if (LENGTH(readfix) > 1) {
+	} else if (LENGTH(readfix)) {
 		throw std::runtime_error("read prefix should be a single character string"); 
 	}
 
-	// Checking minimum score, starting position.
+	// Checking minimum score, starting position (minus 1 to get to zero indexing).
 	if (!Rf_isInteger(starting) || LENGTH(starting)!=1) { throw std::runtime_error("starting position should be an integer scalar"); }
 	const int startpos=Rf_asInteger(starting);
 	if (!Rf_isInteger(mscore) || LENGTH(mscore)!=1) { throw std::runtime_error("minimum alignment score should be an integer scalar"); }
@@ -180,8 +180,8 @@ SEXP split_linkers(SEXP file1, SEXP file2, SEXP linkerA, SEXP linkerB,
 					(*optr1) << "@" << newprefix << "." << all_count << std::endl;
 					(*optr2) << "@" << newprefix << "." << all_count << std::endl;
 				}
-			} 
-			if (counter==2) {
+			}
+			if (counter==2) { // Don't upgrate this to an else if, counter==1 falls into the 'else' below.
 				(*optr1) << line1 << std::endl;
 				(*optr2) << line2 << std::endl;
 			} else {
@@ -234,8 +234,24 @@ SEXP split_linkers(SEXP file1, SEXP file2, SEXP linkerA, SEXP linkerB,
 	return Rf_mkString(e.what());
 }
 
+/* This is just a function that takes two sequences and returns the SW alignment score. 
+ * The idea is to check the alignment machinery, which is difficult to check exactly
+ * with the full function (given that the only output is a file).
+ */
+SEXP test_align (SEXP ref, SEXP test, SEXP match, SEXP mismatch, SEXP gapo, SEXP gapext) try {
+	if (!Rf_isString(ref) || LENGTH(ref)!=1 || !Rf_isString(test) || LENGTH(test)!=1) { 
+		throw std::runtime_error("single character strings required for input"); 
+	}
+	if (!Rf_isInteger(match) || LENGTH(match)!=1 ||
+		!Rf_isInteger(mismatch) || LENGTH(mismatch)!=1 ||
+		!Rf_isInteger(gapo) || LENGTH(gapo)!=1 ||
+		!Rf_isInteger(gapext) || LENGTH(gapext)!=1) {
+		throw std::runtime_error("alignment parameters must be integer scalars"); 
+	}
 
-void checkery () {
-	return;
+	quickalign aligner(CHAR(STRING_ELT(ref, 0)), Rf_asInteger(match), Rf_asInteger(mismatch), Rf_asInteger(gapo), Rf_asInteger(gapext));
+	return Rf_ScalarInteger(aligner.score_incoming(CHAR(STRING_ELT(test, 0))));
+} catch (std::exception& e) {
+	return Rf_mkString(e.what());
 }
  
