@@ -37,9 +37,14 @@ In this manner, four pairs of FastQ files are produced with the specified \code{
 These files can be used for mapping with an appropriate aligner.
 
 Linker identification is performed by k-mer matching prior to Smith-Waterman alignment.
+K-mer matching avoids the need for a full local alignment in the majority of cases with near-exact matches to the linker sequence.
+Alignment score must be at least \code{min.score} for proper linker identification.
+Linkers will also be unassigned if the alignment scores for \code{linkerA} and \code{linkerB} are identical.
+
 The linker sequence is identified as that starting from \code{start} and running to the length of \code{linkerA} or \code{linkerB}.
-If \code{start=NA}, a corresponding length from the 3' tail of each read is used.
-Specifying \code{start} can be useful when sequencing is performed past the ligation junction.
+If \code{start=NA}, the corresponding length from the 3' tail of each read is used.
+Specifying an integer value for \code{start} can be useful when sequencing is performed past the ligation junction.
+In all cases, both linkers should have the same length.
 
 The read name in the output files can also be altered by setting \code{read.prefix}.
 This can guarantee that the names in each pair are unique, if concatenated FastQ files are provided.
