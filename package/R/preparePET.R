@@ -1,4 +1,4 @@
-preparePET<-function(bam, dir, dedup=TRUE, yield=1e7, minq=0)
+preparePET<-function(bam, dir, dedup=TRUE, yield=1e7, minq=NA)
 # This function prepares ChIA-PET data by stripping out valid pairs from 
 # the BAM file and storing a set of tables describing the interacting loci 
 # (if it passes quality controls). We use an anchor/target set-up whereby 
@@ -38,7 +38,8 @@ preparePET<-function(bam, dir, dedup=TRUE, yield=1e7, minq=0)
 		name.rle <- rle(out$qname)
 		is.single <- name.rle$lengths==1L
 		is.other <- name.rle$lengths>2L
-		is.unmapped <- bitwAnd(out$flag, 0x4)!=0L | out$mapq < minq
+		is.unmapped <- bitwAnd(out$flag, 0x4)!=0L 
+		if (!is.na(minq)) { is.unmapped <- is.unmapped | out$mapq < minq }
 		is.marked <- bitwAnd(out$flag, 0x400)!=0L
 		mate.read <- cumsum(name.rle$lengths)[!is.single & !is.other] 
 		first.read <- mate.read - 1L

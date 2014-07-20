@@ -5,7 +5,7 @@
 \description{Generate a tag directory from a BAM file for ChIA-PET data}
 
 \usage{
-preparePET(bam, dir, dedup=TRUE, yield=1e7, minq=0)
+preparePET(bam, dir, dedup=TRUE, yield=1e7, minq=NA)
 }
 
 \arguments{
@@ -30,16 +30,15 @@ order. The position of each tag on either chromosome is noted for each pair.
 When the anchor and target refer to the same chromosome, the anchor tag is
 designated as that with the larger 3' position.
 
-Both tags in the pair must be mapped, have MAPQ above \code{minq} and not be
-marked as duplicates if \code{dedup=TRUE}. A high value for \code{minq} is
-generally recommended as it avoids unstable/incorrect alignments for short tag
-sequences. Setting \code{dedup} is also recommended as the chance of random
-exact overlaps across the interaction space is generally low; any overlaps
-are probably genuine PCR duplicates.
+Both tags in the pair must be mapped, have MAPQ above \code{minq} and not be marked as duplicates if \code{dedup=TRUE}. 
+A high value for \code{minq} is generally recommended as it avoids unstable/incorrect alignments for short tag sequences. 
+The default \code{NA} values means that no filtering is performed. 
+
+Setting \code{dedup} is also recommended as the chance of random exact overlaps across the interaction space is generally low.
+Any overlaps are probably technical artifacts caused by PCR duplication.
 
 To reduce memory usage, read pairs are read in by \code{yield} at a time.
-Reducing \code{yield} will reduce peak memory usage, albeit at the cost of
-computational speed. 
+Reducing \code{yield} will reduce peak memory usage, albeit at the cost of computational speed. 
 }
 
 \value{
