@@ -6,8 +6,8 @@
 
 #include "chia_counter.h"
 
-chia_counter::chia_counter(SEXP pulled, bool issame, int filt, count_manager* ptr) : nlibs(0), filter(filt), 
-		is_same_chr(issame), cmptr(ptr) {
+chia_counter::chia_counter(SEXP pulled, bool issame, int filt, count_manager* ptr) : nlibs(0), cmptr(ptr), 
+		filter(filt), is_same_chr(issame) { 
 	if (!isNewList(pulled)) { throw std::runtime_error("data on interacting PETs must be contained within a list"); }
 	nlibs=LENGTH(pulled);
 	asptrs.resize(nlibs);

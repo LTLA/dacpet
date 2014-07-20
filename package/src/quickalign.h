@@ -15,8 +15,8 @@ public:
 	~quickalign();
 	int score_incoming(const char*);
 private:
-	char* reference;
 	int reflen;
+	char* reference;
 	
 	std::deque<int> substrings;
 	std::deque<std::deque<int> > matched_pos;

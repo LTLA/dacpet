@@ -65,7 +65,7 @@ quickalign::quickalign(const char* ref, int ma, int mis, int gapo, int gape) : r
 	encoder refen(ref);
 	do {
 		const int& current=refen.get_code();
-		if (substrings.size() <= current) { substrings.resize(current+1, -1); }
+		if (int(substrings.size()) <= current) { substrings.resize(current+1, -1); }
 		if (substrings[current] < 0) { 
 			substrings[current]=matched_pos.size(); 
 			matched_pos.resize(substrings[current]+1);
@@ -103,7 +103,7 @@ int quickalign::score_incoming(const char* target) {
 	do {
 		const int& curcode=incoming.get_code();
 		const int& curpos=incoming.get_position();
-		if (curcode >= substrings.size() || substrings[curcode]<0) { continue; }
+		if (curcode >= int(substrings.size()) || substrings[curcode]<0) { continue; }
 
  		const std::deque<int>& refposes=matched_pos[substrings[curcode]];
 		for (int r=refposes.size()-1; r>=0; --r) {
