@@ -764,55 +764,46 @@ This is a bit puzzling given that ChIA-PET should reflect the variability of ChI
 \chapter{Testing for significant interactions}
 
 \section{Using the quasi-likelihood F-test}
-The \code{glmQLFTest} function also performs the F-test for each interaction so
-a new function call is not required. You should, however, make sure that you
-are specifying the contrast matrix correctly. For the one-way layout, the
-coefficient of interest is that corresponding to the homo-/hetero-linker fold
-change. This should be specified through the \code{coef} or \code{contrast} arguments.
+The \code{glmQLFTest} function also performs the F-test for each interaction so a new function call is not required. 
+Users should, however, make sure that they are specifying the contrast matrix correctly. 
+For the one-way layout, the coefficient of interest is that corresponding to the homo-/hetero-linker fold change. 
+This should be specified through the \code{coef} or \code{contrast} arguments.
 
 <<>>=
 result.group <- glmQLFTest(y.group, design.group, robust=TRUE, coef=2)
 topTags(result.group)
 @
 
-Recall that the null hypothesis is that the (normalized) hetero-linker counts
-are the same as the homo-linker counts. The computed $p$-value represents the
-evidence against the null for each interaction. The log-fold change represents
-the relative increase of the hetero-linker count over the homo-linker count.
-In this case, they are negative for all interactions. This corresponds to an
-increase in the homo-linker count and is consistent with a specific
-interaction.
+Recall that the null hypothesis is that the (normalized) hetero-linker counts are the same as the homo-linker counts. 
+The computed $p$-value represents the evidence against the null for each interaction. 
+The log-fold change represents the relative increase of the hetero-linker count over the homo-linker count.
+In this case, they are negative for all interactions. 
+This corresponds to an increase in the homo-linker count and is consistent with the presence of specific interactions.
 
 <<>>=
 summary(result.group$table$logFC)
 @
 
 You may also be wondering why we are not using the likelihood ratio test (LRT).
-Indeed, the LRT is the more obvious test for inferences with GLMs. However, the
-QL F-test is preferred as it accounts for the variability and uncertainty of
-the QL dispersion estimates \citep{lund2012ql}. This means that it can maintain
-type I error control in the presence of heteroskedasticity whereas the LRT does
-not.
+Indeed, the LRT is the more obvious test for inferences with GLMs. 
+However, the QL F-test is preferred as it accounts for the variability and uncertainty of the QL dispersion estimates \citep{lund2012ql}. 
+This means that it can maintain type I error control in the presence of heteroskedasticity whereas the LRT does not.
 
 \section{Multiplicity correction and the FDR}
-Correction for multiple tests is performed by controlling the false discovery
-rate (FDR) using the Benjamini-Hochberg  method \citep{benjamini1995fdr}. In
-this case, the FDR refers to the proportion of detected interactions that are
-false positives. Control of the FDR is often more appropriate than control of
-the family-wise error rate (i.e., probability of one or more false positives in
-the entire dataset), as it provides a more appropriate compromise between
-specificity and power.
+Correction for multiple tests is performed by controlling the false discovery rate (FDR) using the Benjamini-Hochberg  method \citep{benjamini1995fdr}. 
+In this case, the FDR refers to the proportion of detected interactions that are false positives. 
+Control of the FDR is often more appropriate than control of the family-wise error rate (i.e., probability of one or more false rejections).
+This is because the former provides a more appropriate compromise between specificity and power in genomic analyses.
 
 <<>>=
 adj.p <- p.adjust(result.group$table$PValue, method="BH")
 sum(adj.p <= 0.05)
 @
 
-Significantly specific interactions are defined as those that are detected at
-an FDR of 5\%. These can be saved to file as necessary. In practice, all
-interactions should be sorted by the $p$-value and saved to file. This means
-that results can be queried in a flexible manner without needing to re-run the
-entire analysis, e.g., if the FDR threshold is changed.
+Significantly specific interactions are defined as those that are detected at an FDR of 5\%. 
+These can be saved to file as necessary. 
+In practice, all interactions should be sorted by the $p$-value and saved to file. 
+This means that results can be queried in a flexible manner without needing to re-run the entire analysis, e.g., if the FDR threshold is changed.
 
 <<>>=
 ax <- freqs$region[freqs$pairs$anchor]
@@ -826,11 +817,10 @@ write.table(out[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALSE)
 
 \section{Visualization with plaid plots}
 It comes a time that some visualization of interesting results is necessary.
-This can be performed using the \code{plotChIA} function, which constructs a
-plaid plot of the interaction space \citep{lieberman2009hic}. Briefly, each axis
-is a chromosome segment. The box represents an interaction between the
-corresponding points on each axis.  The colour of the box is proportional to
-the number of tag pairs mapped between the interacting loci.
+This can be performed using the \code{plotChIA} function, which constructs a plaid plot of the interaction space \citep{lieberman2009hic}. 
+Briefly, each axis is a chromosome segment. 
+The box represents an interaction between the corresponding points on each axis. 
+The colour of the box is proportional to the number of tag pairs mapped between the interacting loci.
 
 <<label=chia1aa,eval=FALSE,echo=FALSE>>=
 expanded.a <- resize(ax[o[1]], fix="center", width=50000)
@@ -856,13 +846,11 @@ abline(0, 1, lty=2)
 <<chia1bb>>
 @
 
-Some expansion of the plot boundaries is often desirable. This ensures that the
-context of the interaction can be determined by examining the features in the
-surrounding interaction space. It is also possible to tune the width of the
-boxes through a parameter that is, rather unsurprisingly, named \code{width}.
-The dotted line represents the diagonal around which the plot is symmetric.
-The actual interaction occurs at the center of the plot and is marked by
-a rectangle in the first plot.
+Expansion of the plot boundaries is often desirable. 
+This ensures that the context of the interaction can be determined by examining the features in the surrounding interaction space. 
+It is also possible to tune the width of the boxes through a parameter that is, rather unsurprisingly, named \code{width}.
+The dotted line represents the diagonal around which the plot is symmetric. 
+The actual interaction occurs at the center of the plot and is marked by a rectangle in the first plot.
 
 \setkeys{Gin}{width=0.32\textwidth}
 \begin{center}
@@ -877,15 +865,13 @@ a rectangle in the first plot.
 @
 \end{center}
 
-The \code{cap} value controls the relative scale of the colours. A smaller
-\code{cap} is necessary for the AB track to normalize the intensity, much like
-that discussed in Section~\ref{sec:norm}. In this case, a homo-/hetero-linker
-ratio of 4:1 is expected under the null, so the cap is (10+10):5. This means
-that the AB colours can be directly compared to those of AA and BB. Upon doing
-so, you'll find that the intensity of the homo-linkers is much greater than
-that of the hetero-linkers for this part of the interaction space. This
-suggests that the interaction is specific and genuine. Here's another example 
-in a different colour:
+The \code{cap} value controls the relative scale of the colours. 
+A smaller \code{cap} is necessary for the AB track to normalize the intensity, much like that discussed in Section~\ref{sec:norm}. 
+In this case, a homo-/hetero-linker ratio of 4:1 is expected under the null, so the cap is (10+10):5. 
+This means that the intensity of colours in the AB plot can be directly compared to those of AA and BB. 
+Upon doing so, you'll find that the intensity of the homo-linkers is much greater than that of the hetero-linkers for this part of the interaction space. 
+This suggests that the interaction is specific and genuine. 
+Here's another example in a different colour:
 
 <<label=chia2aa,eval=FALSE,echo=FALSE>>=
 expanded.a <- resize(ax[o[3]], fix="center", width=50000)
@@ -920,17 +906,14 @@ plotChIA(curdirs[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10, co
 @
 \end{center}
 
-Tying this in with gene annotation, ChIP-seq peaks and/or RNA-seq data can then
-suggest some functions for these interactions, e.g., enhancer loops, gene loops,
-gene-gene interactions. Of course, you should always keep in mind the protein that 
-is being targeted. This particular experiment targets RNA polymerase II so 
-most activity will occur at genes and have a transcriptional focus. Other protein
-targets are likely to have different profiles.
+Tying this in with gene annotation, ChIP-seq peaks and/or RNA-seq data can then suggest some functions for these interactions, e.g., enhancer loops, gene loops, gene-gene interactions. 
+Of course, users should always keep the identify of the target protein in mind. 
+This particular experiment targets RNA polymerase II so most activity will occur at genes and have a transcriptional focus. 
+Other protein targets are likely to have different profiles.
 
-\chapter{References and other stuff}
+\chapter{Epilogue}
 
 \section{Session Information}
-
 <<>>=
 sessionInfo()
 @
