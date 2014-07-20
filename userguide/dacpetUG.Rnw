@@ -96,9 +96,8 @@ guide or contacting one of the authors is probably the best approach.
 Thoughtful suggestions for improvements are occassionally appreciated.
 
 \section{Quick start}
-As a quick demonstration of the analysis is largely impossible, I'll just
-leave this part empty. Suffice to say that there are several components of 
-the pipeline that shall be discussed:
+As a quick demonstration of the analysis is largely impossible, this part will just be left empty. 
+Suffice to say that there are several components of the pipeline that shall be discussed:
 \begin{enumerate}
 \item converting BAM files to tag directories
 \item removing self-ligation events
@@ -107,9 +106,8 @@ the pipeline that shall be discussed:
 \item modelling biological variability
 \item testing for significant differences between homo-/hetero-linker counts
 \end{enumerate}
-In the various examples for this guide, we'll be using data from an experiment
-targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. Obviously, 
-readers will have to modify the code according to their own circumstances.
+In the various examples for this guide, data will be used from an experiment targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. 
+Obviously, readers will have to modify the code according to their own circumstances.
 
 \chapter{Preparing tag directories}
 
@@ -477,7 +475,7 @@ Low-abundance interactions are those with low tag pair counts.
 These do not provide enough evidence for rejection of the null hypothesis. 
 They are also more likely to represent weak and uninteresting non-specific ligation events.
 Removal of these interactions can improve the sensitivity of the analysis by reducing the total number of tests and mitigating the severity of the multiple testing correction. 
-Filtering on the average count (as computed by the aveLogCPM function in edgeR \citep{mccarthy2010glm}) is recommended under the NB model.
+Filtering on the average count (as computed by the aveLogCPM function in the edgeR package \citep{mccarthy2010glm}) is recommended for statistical analyses using a negative binomial (NB) model.
 
 <<>>=
 require(edgeR)
@@ -526,58 +524,51 @@ The above code adjusts for the differences in the \textit{areas} of the interact
 \chapter{Normalizing linker combinations}
 
 \section{Motivation}
-Some normalization is necessary prior to comparisons between homo- and
-hetero-linker counts. This accounts for biases introduced by non-equal
-proportions of each linker as well as non-random ligation. Failure to normalize
-for these effects will result in incorrect conclusions. In particular, the
-nominal expected ratio of homo- to hetero-linker counts is 1:1 in a na\"ive
-comparison. The true expected ratio is often higher, so testing against the
-nominal ratio will result in many false positives.
+Some normalization is necessary prior to making comparisons between homo- and hetero-linker counts. 
+This accounts for biases introduced by non-equal proportions of each linker as well as non-random ligation. 
+Failure to normalize for these effects will result in incorrect conclusions. 
+In particular, the nominal expected ratio of homo- to hetero-linker counts is 1:1 in a na\"ive comparison. 
+The true expected ratio is often higher for a number of reasons (see below), so testing against the nominal ratio will result in many false positives.
 
 \section{Diagnosing random ligation}
 
 \subsection{Using the Hardy-Weinberg law for normalization}
-Assume that ligation between DNA fragments is random. Each DNA fragment can be
-treated as a diploid individual where each end represents an allele. Random
-ligation is equivalent to random mating between individuals. Now, assume that
-the proportions of DNA fragments attached to linker A and B are $a$ and $b=1-a$
-respectively. Under the Hardy-Weinberg law, this means that the the proportion
-of AA, AB and BB would be $a^2$, $2ab$ and $b^2$, respectively.
+Assume that ligation between DNA fragments is random. 
+Each DNA fragment can be treated as a diploid individual where each end represents an allele. 
+Random ligation is equivalent to random mating between individuals. Now
+, assume that the proportions of DNA fragments attached to linker A and B are $a$ and $b=1-a$ respectively. 
+Under the Hardy-Weinberg law, this means that the the proportion of AA, AB and BB would be $a^2$, $2ab$ and $b^2$, respectively.
 
-This result is useful as it allows normalization to remove the effects of
-non-equal A and B proportions, i.e., $a\ne b$. Consider a case when $a=0.5b$.
-The expected homo- to hetero-linker ratio would then be 5:4. If you failed to
-consider this effect, you would (incorrectly) expect a ratio of 1:1 for a
-na\"ive comparison.  Any interactions with the true expected ratio would
-deviate from the incorrect ratio, increasing the proportion of false positives. 
+This result is useful as it allows normalization to remove the effects of non-equal A and B proportions, i.e., $a\ne b$. 
+Consider a case when $a=0.5b$. 
+The expected homo- to hetero-linker ratio would then be 5:4. 
+If you failed to consider this effect, you would (incorrectly) expect a ratio of 1:1 for a na\"ive comparison.  
+Any interactions with the true expected ratio would deviate from the incorrect expected ratio, increasing the proportion of false positives. 
 
-This problem can be avoided with normalization. The value of $a$ can be
-determined from the proportion of tags that were attached to linker A. The
-expected proportions for each linker can then be calculated based on the
-Hardy-Weinberg law. These proportions are easily transformed into an expected
-ratio for the homo- and hetero-linker counts. In the example above, the
-expected ratio is 5:4. One could then normalize the data by dividing the
-homo-linker counts by 1.25 prior to any comparison.
+This problem can be avoided with normalization. 
+The value of $a$ can be empirically determined from the proportion of tags that were attached to linker A. 
+The expected proportions for each linker can then be calculated based on the Hardy-Weinberg law. 
+These proportions are easily transformed into an expected ratio for the homo- and hetero-linker counts. 
+Alternatively, normalization can be performed to transform the expected ratio into a simple 1:1 comparison.
+In the example above, the expected ratio is 5:4. 
+One could then normalize the data by dividing the homo-linker counts by 1.25 prior to any comparison.
 
 \subsection{Checking mitochondrial counts}
-The accuracy of the random ligation model can be assessed for each dataset by
-counting tag pairs mapped between the nuclear and mitochondrial chromosomes.
-The assumption here is that the mitochondrial genome does not interact with the
-nuclear chromosomes. This is fairly reasonable given that they belong to
-separate organelles. Thus, any counts observed here are attributable to
-non-specific (and presumably random) ligation.
+The accuracy of the random ligation model can be assessed for each dataset by using \code{extractMito} to count tag pairs mapped between the nuclear and mitochondrial chromosomes.
+The assumption here is that the mitochondrial genome does not interact with the nuclear chromosomes. 
+This is fairly reasonable given that they belong to separate organelles. 
+Thus, any counts observed here are attributable to non-specific (and presumably random) ligation.
 
 <<>>=
 mitocounts <- sapply(curdirs, FUN=function(x) { sum(extractMito(x)) })
 mitocounts
 @
 
-It is fairly obvious that these counts do not follow the predicted
-Hardy-Weinberg proportions. You can also go through the motions with a
-Pearson's chi-squared test to confirm this result. So, does this correspond to
-some fascinating new biology involving inter-organelle interactions? Well,
-probably not. It just means that non-specific ligation is not necessarily
-random.
+It is fairly obvious that these counts do not follow the predicted Hardy-Weinberg proportions. 
+You can also go through the motions with a Pearson's chi-squared test to confirm this result. 
+So, does this correspond to some fascinating new biology involving inter-organelle interactions? 
+Well, probably not. 
+It just means that non-specific ligation is not necessarily random.
 
 <<>>=
 lib.1 <- mitocounts[1:3]
@@ -588,13 +579,11 @@ chisq.test(lib.1, p=expected)
 @
 
 \subsection{Checking counts across the interaction space}
-The mitochondrial results can be confirmed with counts from the rest of the
-dataset. Tag pairs are counted into pairs of 10 Mbp bins as described before.
-The assumption here is that most bin pairs contain only non-specific ligation
-events, i.e., most contacts in the interaction space are not specific. This is
-generally reasonable as contacts would not be expected between all pairs of
-binding sites. Again, large bins are necessary to count rare non-specific
-events.
+The mitochondrial results can be confirmed with counts from the rest of the dataset. 
+Tag pairs are counted into pairs of 10 Mbp bins as described before. 
+The assumption here is that most bin pairs contain only non-specific ligation events, i.e., most contacts in the interaction space are not specific. 
+This is generally reasonable as contacts would not be expected between all pairs of binding sites. 
+Again, large bins are necessary to count rare non-specific events.
 
 <<>>=
 binned <-countPET(curdirs, width=1e7, filter=1)
@@ -602,15 +591,14 @@ rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
 head(rebin$counts)
 @
 
-The M-value for each interaction is defined as the log-ratio of homo- to
-hetero-linker counts. This is used to construct a MA plot as shown below.  If
-non-specific ligation is random, the expected M-value under the random ligation
-model should be observed (red line). However, the bulk of interactions have a
-substantially higher M-value. This is consistent with the above-expected
-homo-linker counts for the nuclear-mitochondrial ``interactions''. 
+The M-value for each interaction is defined as the log-ratio of homo- to hetero-linker counts. 
+This is used to construct a MA plot as shown below.  
+If non-specific ligation is random, the expected M-value under the random ligation model should be observed (red line). 
+However, the bulk of interactions have a substantially higher M-value. 
+This is consistent with the above-expected homo-linker counts for the nuclear-mitochondrial ``interactions''. 
 
 <<eval=FALSE,label=plotma>>=
-adj.counts<-cpm(rebin$counts, lib.size=rebin$totals, log=TRUE)
+adj.counts <- cpm(rebin$counts, lib.size=rebin$totals, log=TRUE)
 m <- adj.counts[,1]-adj.counts[,2]
 a <- adj.counts[,1]+adj.counts[,2]
 smoothScatter(x=a, y=m, xlab="A", ylab="M", main=rebin$libname[1], cex.lab=1.4, cex.axis=1.2)
@@ -623,30 +611,23 @@ abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
 @
 \end{center}
 
-This result supports the notion that non-specific ligation is not equivalent to
-random ligation. At the very least, non-randomness means that the random
-ligation model cannot be used for normalization. At worst, the ligation may be
-so non-random that there are no hetero-linker counts for any meaningful
-comparison. Different datasets may experience differing violations of the
-randomness assumption, so some diagnostics are recommended for quality control.
+This result supports the notion that non-specific ligation is not equivalent to random ligation. 
+At the very least, non-randomness means that the random ligation model cannot be used for normalization. 
+At worst, the ligation may be so non-random that there are no hetero-linker counts for any meaningful comparison. 
+Different datasets may experience differing violations of the randomness assumption, so the above diagnostics are recommended for quality control.
 
 \section{Normalizing for empirical effects}
 \label{sec:norm}
-Normalization must account for non-equal linker proportions and non-random
-ligation. This can be done empirically by assuming that most interactions are
-non-specific. This means that the average M-value for most interactions can be
-used to define the expected homo-/hetero-linker ratio under the non-specific
-hypothesis. For example, if most interactions have an M-value close to 2, one
-would expect a homo-/hetero-linker ratio of around 4:1. 
+Normalization must account for non-equal linker proportions and non-random ligation. 
+This can be done empirically by assuming that most interactions are non-specific. 
+This means that the average M-value for most interactions can be used to define the expected homo-/hetero-linker ratio under the non-specific hypothesis. 
+For example, if most interactions have an M-value close to 2, one would expect a homo-/hetero-linker ratio of around 4:1. 
 
-Normalization can then be performed to scale the counts according to the
-expected ratio. Specifically, the binned homo-/hetero-linker counts are passed
-into the trimmed mean of M-values (TMM) procedure \citep{oshlack2010tmm}. This
-returns a normalization factor for each set of counts in each library. Counts
-are then (conceptually) divided by the normalization factor, such that a direct
-comparison can be performed between the normalized counts. For example, an
-expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to
-comparison.
+Normalization can then be performed to scale the counts according to the expected ratio. 
+Specifically, the binned homo-/hetero-linker counts are passed into the trimmed mean of M-values (TMM) procedure \citep{oshlack2010tmm}. 
+This  returns a normalization factor for each set of counts in each library. 
+Counts are then (conceptually) divided by the normalization factor, such that a direct comparison can be performed between the normalized counts. 
+For example, an expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to comparison.
 
 <<>>=
 inter.counts <- rebin$counts[is.na(getDistance(rebin)),]
@@ -654,58 +635,45 @@ normfacs <- calcNormFactors(DGEList(inter.counts, lib.size=rebin$totals))$sample
 normfacs
 @
 
-Note that only inter-chromosomal interactions are used in the TMM procedure.
-This weakens the assumption of a non-specific majority as genuine interactions
-between chromosomes are rarer than those within chromosomes. In the MA plot
-above, all inter-chromosomal interactions lie within the main bulk of M-values
-at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at
-M-values of $\sim$7.
+Note that only inter-chromosomal interactions are used in the TMM procedure. 
+This weakens the assumption of a non-specific majority as genuine interactions between chromosomes are rarer than those within chromosomes. 
+In the MA plot above, all inter-chromosomal interactions lie within the main bulk of M-values at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at M-values of $\sim$7.
 
 \chapter{Assessing biological variability}
 
 \section{Motivation}
-Datasets with biological replicates account for biological variability when
-performing hypothesis testing. This reduces the significance of detected
-features when the data is highly variable. For count-based data, this can be
-achieved using the negative binomial (NB) model in the edgeR package
-\citep{edgeR}.  Estimation of the NB dispersion parameter allows you to model
-the variation between biological replicates. Similarly, estimation of the
-quasi-likelihood (QL) dispersion can be performed to account for
-heteroskedasticity \citep{lund2012ql}. 
+Datasets with biological replicates account for biological variability when performing hypothesis testing. 
+This reduces the significance of detected features when the data is highly variable. 
+For count-based data, this can be achieved using the NB model in edgeR \citep{edgeR}.  
+Estimation of the NB dispersion parameter allows modelling of te variation between biological replicates. 
+Similarly, estimation of the quasi-likelihood (QL) dispersion can be performed to account for heteroskedasticity \citep{lund2012ql}. 
 
-Both types of dispersion estimation can be performed using methods in the
-\edgeR{} package.  This requires fitting of a generalized linear model (GLM) to
-the counts for each interaction \citep{mccarthy2012glm}. To this end, the
-choice of design matrix is critical. Multiple designs are available to
-parameterize the combination of homo-/hetero-linker and library. The effect of
-these choices will be discussed in this paragraph. Firstly, it is necessary
-to assemble a \code{DGEList} object for entry into \edgeR{}:
+Dispersion estimation requires fitting of a generalized linear model (GLM) to the counts for each interaction \citep{mccarthy2012glm}. 
+To this end, the choice of a design matrix is critical. 
+Multiple designs are available to parameterize the combination of homo-/hetero-linker and library. 
+The effect of these choices will be discussed in the following section. 
+Firstly, it is necessary to assemble a \code{DGEList} object for entry into \edgeR{}:
 
 <<>>=
 y <- DGEList(freqs$counts, lib.size=freqs$totals, norm.factors=normfacs)
 @
 
 \section{The paired-sample design}
-The most obvious choice is a paired-sample design, where the homo- and
-hetero-linker counts from a single library are paired together.  The aim is to
-identify differences between the homo- and hetero-linker counts within each
-pair. This design accommodates library-specific effects, i.e., differences in
-the absolute abundance between libraries will not affect the result as long as
-the homo-/hetero-linker count ratio is constant between libraries.
+The most obvious choice is a paired-sample design, where the homo- and hetero-linker counts from a single library are paired together.
+The aim is to identify differences between the homo- and hetero-linker counts within each pair. 
+This design accommodates library-specific effects, i.e., differences in the absolute abundance between libraries will not affect the result as long as the homo-/hetero-linker count ratio is constant between libraries.
+This avoids inflation of the dispersions due to batch effects between libraries.
 
 <<>>=
 design.paired <- model.matrix(~factor(freqs$libname) + factor(freqs$hetero))
 design.paired
 @
 
-Estimation can then proceed using the methods in the \edgeR{} package. The
-\code{estimateDisp} function will estimate the NB dispersion whereas the
-\code{glmQLFTest} function will estimate the QL dispersion. In both cases, the
-low number of replicates means that limited information is available to
-estimate the dispersion for each interaction. Thus, an empirical Bayes strategy
-is used to stabilise the estimates by sharing information between interactions.
-This is represented by the estimation of a mean-dispersion trend (for NB) and
-shrinkage of the per-interaction dispersion estimates towards a trend (for QL).
+Estimation of the dispersions can then be performed using methods in the \edgeR{} package. 
+The \code{estimateDisp} function will estimate the NB dispersion whereas the \code{glmQLFTest} function will estimate the QL dispersion. 
+In both cases, the low number of replicates means that limited information is available to estimate the dispersion for each interaction. 
+Thus, an empirical Bayes strategy is used to stabilise the estimates by sharing information between interactions. 
+This is represented by the estimation of a mean-dispersion trend (for NB) and shrinkage of the per-interaction dispersion estimates towards a trend (for QL).
 
 <<label=bcvpaired,eval=FALSE,echo=FALSE>>=
 y.paired <- estimateDisp(y, design.paired)
@@ -721,11 +689,9 @@ result.paired <- glmQLFTest(y.paired, design.paired, robust=TRUE, plot=TRUE)
 <<qlpaired>>
 @
 
-It is worth pointing out that the biological coefficient of variation is
-defined as the square root of the NB dispersion. This represents the proportion
-of the counts that is attributable to biological variability. The QL dispersion
-is estimated from the GLM deviance and is shown as such, with a quarter-root
-transformation applied for maximum visibility across the range of values.
+Note that the biological coefficient of variation is defined as the square root of the NB dispersion. 
+This represents the proportion of the counts that is attributable to biological variability. 
+The QL dispersion is estimated from the GLM deviance and is shown as such, with a quarter-root transformation applied for maximum visibility across the range of values.
 
 \setkeys{Gin}{width=0.49\textwidth}
 \begin{center}
@@ -738,41 +704,32 @@ transformation applied for maximum visibility across the range of values.
 \end{center}
 \setkeys{Gin}{width=0.8\textwidth}
 
-For real datasets, the paired-sample design is not effective due to the
-frequency of zeros for the hetero-linker counts. This means that no residual
-degrees of freedom are available for dispersion estimation. Conceptually, you
-can imagine that the paired-sample design measures the variability of the
-homo-/hetero-linker fold change across libraries. Zeros for the hetero-linker
-counts means that the fold-change for each library will be undefined. This
-manifests as zero values for most of the QL dispersions in the plot above.
+For real datasets, the paired-sample design is not effective due to the frequency of zeros for the hetero-linker counts. 
+This means that no residual degrees of freedom are available for dispersion estimation. 
+Conceptually, you can imagine that the paired-sample design measures the variability of the homo-/hetero-linker fold change across libraries. 
+Zeros for the hetero-linker counts means that the fold-change for each library will be undefined. 
+This manifests as zero values for most of the QL dispersions in the plot above.
 
-It may be possible to overcome this problem by adding a prior value onto the
-counts. This will avoid zeros and allow passage through the QL framework.
-However, this is a fairly arbitrary solution as the estimated dispersion will
-depend on the chosen prior. It will also lead to underestimation of the
-dispersion, as the hetero-linker count will become a non-zero constant that
-does not reflect the true variability of the counts.
+It may be possible to overcome this problem by adding a prior value onto the counts. 
+This will avoid zeros and allow passage through the QL framework. 
+However, this is a fairly arbitrary solution as the estimated dispersion will depend on the chosen prior. 
+It will also lead to underestimation of the dispersion, as the hetero-linker count will become a non-zero constant that does not reflect the true variability of the counts.
 
 \section{The one-way design}
-The preferred design for routine ChIA-PET analyses uses a one-way layout. All
-hetero-linker counts are treated as a single group, and all homo-linker counts
-are treated as another group. This means that the NB and QL dispersions can be
-properly estimated from the non-zero homo-linker counts, even when the
-hetero-linker counts are all zero.
+In this author's opinion, the design for routine ChIA-PET analyses should use a one-way layout. 
+All hetero-linker counts are treated as a single group, and all homo-linker counts are treated as another group. 
+This means that the NB and QL dispersions can be properly estimated from the non-zero homo-linker counts, even when the hetero-linker counts are all zero.
 
 <<>>=
 design.group <- model.matrix(~factor(freqs$hetero))
 design.group
 @
 
-Estimation can then be performed as previously described. This approach avoids
-the zero-valued QL dispersions observed for the paired-sample design. Of
-course, the one-way layout assumes that there are no library-specific effects.
-For example, if the absolute count size changed randomly between libraries but
-the homo-/hetero-linker fold change was constant, the dispersions would be
-inflated in the one-way design but not in the paired-sample design.
-
-% (and the homo-/hetero-linker group means would be correlated, which could cause problems in downstream testing)
+Estimation can be performed as previously described. 
+This approach avoids the zero-valued QL dispersions observed for the paired-sample design. 
+Of course, the one-way layout assumes that there are no library-specific effects. 
+For example, if the absolute count size changed randomly between libraries but the homo-/hetero-linker fold change was constant, the dispersions would be inflated in the one-way design but not in the paired-sample design.
+The homo-/hetero-linker group means would also be correlated, which could cause problems in downstream testing.
 
 <<label=bcvgroup,eval=FALSE,echo=FALSE>>=
 y.group <- estimateDisp(y, design.group)
@@ -800,11 +757,9 @@ result.group <- glmQLFTest(y.group, design.group, robust=TRUE, plot=TRUE)
 \setkeys{Gin}{width=0.8\textwidth}
 
 Based on these results, inflation of the NB dispersion is not a problem here.
-In fact, the NB dispersion is exceptionally low given that biological
-replicates are being compared. For most other types of sequencing data (e.g.,
-RNA-seq, ChIP-seq), NB dispersion estimates are usually around 0.01 to 0.1.
-Much lower values are observed here. This is a bit puzzling given that
-ChIA-PET should reflect the variability of ChIP-seq (and then some).
+In fact, the NB dispersion is exceptionally low given that biological replicates are being compared. 
+For most other types of sequencing data (e.g., RNA-seq, ChIP-seq), NB dispersion estimates are usually around 0.01 to 0.1 but much lower values are observed here. 
+This is a bit puzzling given that ChIA-PET should reflect the variability of ChIP-seq, and then some.
 
 \chapter{Testing for significant interactions}
 
