@@ -277,7 +277,7 @@ data.frame(curdirs, is.het, libname)
 
 \section{Using windows or bins}
 \label{sec:bincount}
-\subsection{Counting wth \code{countPET}}
+\subsection{Overview}
 The tag pairs must be summarized into counts for interactions prior to the statistical analysis. 
 The simplest strategy for doing so is to count tag pairs into pairs of bins. 
 Let the genome be partitioned into contiguous and non-overlapping bins of equal size. 
@@ -365,8 +365,7 @@ for (x in discardfiles) {
 Technically, all libraries should be pooled to maintain statistical validity during peak calling.
 This ensures that the called peaks are independent of the downstream hypothesis tests for specificity.
 In practice, this is not an issue as self-ligation events should dominate the outward-facing tag pairs. 
-This means that only homo-linker directories need to be used for peak calling. 
-Relatively few outward-facing tag pairs should be present for hetero-linker directories anyway.
+This means that only homo-linker tag pairs need to be used (or indeed, are available) for peak calling. 
 
 % Assume there are no self-ligation events. 
 % Any outward-facing tag pairs are generated from inter-ligation events and will be correlated with the other strand orientations. 
@@ -377,11 +376,11 @@ Relatively few outward-facing tag pairs should be present for hetero-linker dire
 The tags themselves are stored as if they were generated from a ChIP-seq experiment. 
 For each outward pair, the left tag is mapped to the reverse strand for a ChIA-PET experiment, but must be switched to the forward strand to mimic a ChIP-seq experiment. 
 The same logic applies for the right tag. 
-Only one tag is randomly taken from each fragment to mimic single-end data, given that most peak-callers cannot handle paired-end experiments. 
+Only one tag is randomly taken from each fragment to mimic single-end data, given that many peak-callers cannot directly handle paired-end data.
 
 \subsection{Reading peaks and checking widths}
 So, assume that you got your peak-caller to save the results in \code{peak.file}. 
-In this case, MACS was called with the command \code{macs14 -t pooled.bed -f BED -n here -{}-nomodel}. 
+In this case, MACS \citep{zhang2008macs} was called with the command \code{macs14 -t pooled.bed -f BED -n here -{}-nomodel}. 
 The peaks can then be loaded into a \code{GRanges} object after peak calling, as shown below:
 
 <<>>=
@@ -400,7 +399,7 @@ This minimum width is justified as being twice the (estimated) average fragment 
 summary(width(peaks))
 peaks <- resize(peaks, fix="center", width=pmax(2000, width(peaks)))
 peaks <- reduce(peaks)
-peaks
+summary(width(peaks))
 @
 
 For each pair of peaks, the number of tag pairs is counted based on the presence of the $3'$ end of one tag within each peak interval. 
@@ -475,7 +474,7 @@ Low-abundance interactions are those with low tag pair counts.
 These do not provide enough evidence for rejection of the null hypothesis. 
 They are also more likely to represent weak and uninteresting non-specific ligation events.
 Removal of these interactions can improve the sensitivity of the analysis by reducing the total number of tests and mitigating the severity of the multiple testing correction. 
-Filtering on the average count (as computed by the aveLogCPM function in the edgeR package \citep{mccarthy2010glm}) is recommended for statistical analyses using a negative binomial (NB) model.
+Filtering on the average count (as computed by the aveLogCPM function in the edgeR package \citep{mccarthy2012glm}) is recommended for statistical analyses using a negative binomial (NB) model.
 
 <<>>=
 require(edgeR)
@@ -565,7 +564,7 @@ mitocounts
 @
 
 It is fairly obvious that these counts do not follow the predicted Hardy-Weinberg proportions. 
-You can also go through the motions with a Pearson's chi-squared test to confirm this result. 
+Any pedants out there can also go through the motions with a Pearson's chi-squared test to confirm this result. 
 So, does this correspond to some fascinating new biology involving inter-organelle interactions? 
 Well, probably not. 
 It just means that non-specific ligation is not necessarily random.
@@ -614,7 +613,8 @@ abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
 This result supports the notion that non-specific ligation is not equivalent to random ligation. 
 At the very least, non-randomness means that the random ligation model cannot be used for normalization. 
 At worst, the ligation may be so non-random that there are no hetero-linker counts for any meaningful comparison. 
-Different datasets may experience differing violations of the randomness assumption, so the above diagnostics are recommended for quality control.
+Note that different datasets may experience differing violations of the randomness assumption.
+Making diagnostic plots like those shown above is recommended for routine quality control.
 
 \section{Normalizing for empirical effects}
 \label{sec:norm}
@@ -716,7 +716,7 @@ However, this is a fairly arbitrary solution as the estimated dispersion will de
 It will also lead to underestimation of the dispersion, as the hetero-linker count will become a non-zero constant that does not reflect the true variability of the counts.
 
 \section{The one-way design}
-In this author's opinion, the design for routine ChIA-PET analyses should use a one-way layout. 
+In this author's opinion, routine ChIA-PET analyses should use a one-way layout for the design matrix. 
 All hetero-linker counts are treated as a single group, and all homo-linker counts are treated as another group. 
 This means that the NB and QL dispersions can be properly estimated from the non-zero homo-linker counts, even when the hetero-linker counts are all zero.
 
