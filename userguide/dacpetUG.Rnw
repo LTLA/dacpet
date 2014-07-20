@@ -230,9 +230,10 @@ Subsequent cleavage and sequencing over the ligation junction can only generate 
 In contrast, inter-ligation events between DNA fragments can generate any of the strand orientation. 
 This explains the balance that is observed between the distributions at higher gap sizes.
 
-It's worth pointing out that no skews in strand orientation should exist for the AB library. 
+It's worth pointing out that no skews in strand orientation should theoretically exist for the AB library. 
 This is because all AB pairs should be formed by inter-ligation events. 
-The presence of any self-ligation spikes is probably caused by spillover from linker assignment errors. 
+Nonetheless, self-ligation spikes will still be observed for the AB library.
+This is probably due to spillover from linker assignment errors. 
 The majority of AB tag pairs are inter-chromosomal so the absolute number of spillover pairs is usually negligble, regardless of the size of the peak in those plots.
 
 \subsection{Mopping up outward-facing tag pairs}
@@ -247,29 +248,26 @@ stripped <- stripOutwardPET(outcoming, min.gap=25000, discard.to=stripfile)
 stripped
 @
 
-This will overwrite the old directory with the stripped results. The return
-value represents the number of tag pairs discarded in this manner. This is
-usually a substantial proportion of all pairs in the directory. Alternatively,
-the stripped  results can be diverted to a new directory if further quality
-control on the original results is desired. The discarded pairs are also routed
-into \code{stripfile} for later use.
+This will overwrite the old directory with the stripped results. 
+The return value represents the number of tag pairs discarded in this manner. 
+This is usually a substantial proportion of all pairs in the directory. 
+Alternatively, the stripped results can be diverted to a new directory if further quality control on the original results is desired. 
+Here, the discarded pairs are also routed into \code{stripfile} for later use.
 
 \chapter{Counting tag pairs into interactions}
 \label{chap:counting}
 
 \section{Motivation}
-The aim of the analysis is to identify specific interactions. This is achieved
-by comparing the homo-linker count for an interaction with the hetero-linker
-count. The aim is to find those interactions where the homo-linker count is
-significantly greater than the hetero-linker count, given that the latter can
-only be formed from non-specific ligation between complexes. This requires some
-manner of counting tag pairs for each interaction.
+The aim of the ChIA-PET data analysis is to identify specific interactions between pairs of genomic binding sites. 
+The evidence for an interaction can be summarized in terms of the number of tag pairs connecting the corresponding binding sites.
+Recall that each tag pair is associated with a linker combination.
+Specific interactions are those where the homo-linker count (i.e., AA or BB) is significantly greater than the hetero-linker count (i.e., AB).
+This is because the latter can only be formed from non-specific ligation between complexes. 
 
-The various demonstrations here will use processed tag directories for the full
-MCF7 dataset. Some work is necessary to determine which directories contain the
-hetero-linker counts, and which directories are generated from the same
-library. These vectors of identifiers will be used later to collapse counts for
-each linker combination into homo-/hetero-linker counts for each library.
+The various demonstrations here will use processed tag directories for the full MCF7 dataset. 
+A little bit of work is necessary to determine which directories contain the hetero-linker counts.
+Similarly, some effort is required to determine which directories are generated from the same library. 
+These vectors of identifiers will be used later to collapse counts for each linker combination into homo-/hetero-linker counts for each library.
 
 <<>>=
 curdirs <- c("SRR372741_AA", "SRR372741_AB", "SRR372741_BB",
@@ -282,13 +280,11 @@ data.frame(curdirs, is.het, libname)
 \section{Using windows or bins}
 \label{sec:bincount}
 \subsection{Counting wth \code{countPET}}
-The tag pairs must be summarized into counts for interactions prior to the
-statistical analysis. The simplest strategy for doing so is to count tag pairs
-into pairs of bins. Let the genome be partitioned into contiguous and
-non-overlapping bins of equal size. For each pair of bins, the number of tag
-pairs with one tag mapped to each bin can be counted.  This is performed for
-each linker combination in each library such that a set of counts is obtained
-for each bin pair.
+The tag pairs must be summarized into counts for interactions prior to the statistical analysis. 
+The simplest strategy for doing so is to count tag pairs into pairs of bins. 
+Let the genome be partitioned into contiguous and non-overlapping bins of equal size. 
+For each pair of bins, the number of tag pairs with one tag mapped to each bin can be counted.  
+This is performed for each linker combination in each library such that a set of counts is obtained for each bin pair.
 
 <<>>=
 countwidth <- 5000
@@ -296,82 +292,62 @@ actual <-countPET(curdirs, width=countwidth, filter=10)
 head(actual$counts)
 @
 
-The function can also be configured to count tag pairs across pairs of sliding
-windows across the genome. This provides greater spatial resolution than bins
-as optimal counting can be achieved for features that span the boundary of a
-bin. However, it is more laborious and generates overlapping window pairs that
-are difficult to interpret. The gains in resolution are also minor given the
-sparsity of tag pairs throughout the genome-by-genome interaction space.
+The function can also be configured to count tag pairs across pairs of sliding windows across the genome. 
+This provides greater spatial resolution than bins as optimal counting can be achieved for features that span the boundary of a bin. 
+However, it is more laborious and generates overlapping window pairs that are difficult to interpret. 
+The gains in resolution are also minor given the sparsity of tag pairs throughout the genome-by-genome interaction space.
 
-\subsection{Effects of reverse read extension}
-The strategy described above considers a tag as ``within'' a bin if the $3'$
-end of the tag is contained within the bin. The $3'$ end is more important than
-the $5'$ end as the former marks the end of the sonicated DNA fragment whereas
-the latter just marks the \textit{Mme}I cut site \citep{fullwood2010chiapet}.
-If a bin overlaps a $3'$ end, it means that the bin spans part of the
-immunoprecipitated fragment. In contrast, overlaps to the $5'$ end do not have
-any obvious interpretation. Of course, this makes little practical difference
-given that the length of the tag is only 20 bp.
+\subsection{Consequences of reverse read extension}
+The strategy described above considers a tag as ``within'' a bin if the $3'$ end of the tag is contained within the bin. 
+The $3'$ end is more important than the $5'$ end as the former marks the end of the sonicated DNA fragment whereas the latter just marks the \textit{Mme}I cut site \citep{fullwood2010chiapet}.
+If a bin overlaps a $3'$ end, it means that the bin spans part of the immunoprecipitated fragment. 
+In contrast, overlaps to the $5'$ end do not have any obvious interpretation. 
+Of course, this makes little practical difference given that the length of the tag is only 20 bp.
 
-The gap between two $3'$ ends in an outward-facing read pairs represents the
-interval spanned by the immunoprecipitated DNA fragment. This suggests that the
-location of the peak in the plot of Section~\ref{ssec:strorient} represents the
-average length of the fragments in the chromatin complexes after sonication and
-immunoprecipitation. In this case, the average fragment length is around 1 kbp.
-Each tag can then be extended from its $3'$ end \textit{in the reverse
-direction of the strand} to the average length. Each reverse-extended tag
-represents the putative interval spanned by the original fragment. 
+The gap between two $3'$ ends in an outward-facing read pairs represents the interval spanned by the immunoprecipitated DNA fragment. 
+This suggests that the location of the peak in the plot of Section~\ref{ssec:strorient} represents the average fragment length in the chromatin complexes after sonication and immunoprecipitation. 
+In this case, the average fragment length is around 1 kbp.
+Each tag can then be extended from its $3'$ end \textit{in the reverse direction of the strand} to the average length. 
+Each reverse-extended tag represents the putative interval spanned by the original fragment. 
 
-This reverse extension can be performed by setting the \code{ext} parameter to
-the average fragment length in \code{countPET}. Counts are then defined for
-each bin pair as the number of tag pairs where one extended tag overlaps each
-bin. In practice, simply increasing the width of each bin by \code{2*ext} will
-have the same effect. This does not provide strand-specific counting but that
-level of detail is probably unnecessary (see discussions on sparsity below).
+This reverse extension can be performed by setting the \code{ext} parameter to the average fragment length in \code{countPET}. 
+Counts are then defined for each bin pair as the number of tag pairs where one extended tag overlaps each bin. 
+In practice, simply increasing the width of each bin by \code{2*ext} will have the same effect. 
+This does not provide strand-specific counting but that level of detail is probably unnecessary (see discussions on sparsity below).
 
 \subsection{Choosing an appropriate width}
-The width of each bin is an important parameter during counting. A large
-\code{width} will count more tag pairs and increase detection power in
-downstream testing. This comes at the expense of spatial resolution whereby
-adjacent events can no longer be distinguished. Loss of resolution can be
-damaging as the count for the feature of interest becomes contaminated with
-irrelevant counts from adjacent features. This can dilute or mask significant
-differences between the homo- and hetero-linker counts. 
+The width of each bin is an important parameter during counting. 
+A large \code{width} will count more tag pairs and increase detection power in downstream testing. 
+This comes at the expense of spatial resolution whereby adjacent events can no longer be distinguished. 
+Loss of resolution can be damaging as the count for the feature of interest becomes contaminated with irrelevant counts from adjacent features. 
+This can dilute or mask significant differences between the homo- and hetero-linker counts. 
 
-For most ChIA-PET data, modest overestimation of the width will have little
-effect as the degree of contamination is limited by the sparsity of tags in the
-surrounding interaction space. This argument also justifies the use of a larger
-\code{width} rather than \code{ext}. The only difference between the two
-parameters is that reverse extension is strand-aware whereas the width is not.
-This will not have a major effect on the results due to the aforementioned
-sparsity.  Given that the average fragment length is around 1 kbp, a width of 5
-kbp is used here to ensure that sufficiently large count sizes are obtained.
+For most ChIA-PET data, modest overestimation of the width will have little effect as the degree of contamination is limited by the sparsity of tags in the surrounding interaction space. 
+This argument also justifies the use of a larger \code{width} rather than \code{ext}. 
+The only difference between the two parameters is that reverse extension is strand-specific whereas the width is not.
+This will not have a major effect on the results due to the aforementioned sparsity.  
+Given that the average fragment length is around 1 kbp, a width of 5 kbp is used here to ensure that sufficiently large count sizes are obtained.
 
 \subsection{Filtering for computational efficiency} 
-Only bin pairs with a sum of counts across all directories above \code{filter}
-will be retained. A reasonably large filter is necessary to avoid reporting an
-excessive number of uninteresting bin pairs that contain very few tag pairs.
-Otherwise, the downstream analyses will be very computationally intensive for
-little practical gain. Conversely,  the filter  value should not be too high
-lest genuine interactions be discarded. The appropriate choice of filter
-statistic and value is discussed in more depth in Section~\ref{sec:filtering}.
+Only bin pairs with a sum of counts across all directories above \code{filter} will be retained. 
+A reasonably large filter is necessary to avoid reporting an excessive number of uninteresting bin pairs that contain very few (e.g., single-digit) tag pairs. 
+Otherwise, the downstream analyses will be very computationally intensive for little practical gain.  
+Conversely, the filter value should not be too high lest genuine interactions be discarded. 
+The appropriate choice of filter statistic and value is discussed in more depth in Section~\ref{sec:filtering}.
 
 \section{Using peaks}
 
 \subsection{Peak calling from outward-facing pairs}
-An alternative approach is to identify binding sites using peak calling
-programs like MACS \citep{zhang2008macs}. These can be run on the
-outward-facing tag pairs that were previously pruned out of the directory.
-This is equivalent to identifying clusters in the ChIA-PET software tool
-\citep{li2010tool}. Outward-facing pairs are more reliable as the presence of
-both tags at a site indicates that they are more likely to be properly mapped.
+An alternative approach is to identify binding sites using peak calling programs like MACS \citep{zhang2008macs}. 
+These can be run on the outward-facing tag pairs that were previously pruned out of the directory.
+This is equivalent to identifying clusters in the ChIA-PET software tool \citep{li2010tool}. 
+Outward-facing pairs are more reliable as the presence of both tags at a site indicates that they are more likely to be properly mapped.
 
 \subsection{Pooling to a BED file}
-Here, the outward-facing pairs from all directories are pooled together and
-stored in a BED file. Pooling is recommended as it ensures that a single set of
-peaks can be obtained from the entire dataset. This means that consolidation of
-multiple peak sets is not required. It also increases the number of tags
-involved for sensitive peak calling.
+Here, the outward-facing pairs from all directories are pooled together and stored in a BED file. 
+Pooling is recommended as it ensures that a single set of peaks can be obtained from the entire dataset. 
+This means that consolidation of multiple peak sets is not required. 
+It also increases the number of tags involved for sensitive peak calling.
  
 <<eval=FALSE>>=
 require(rtracklayer)
@@ -388,34 +364,27 @@ for (x in discardfiles) {
 }
 @
 
-Technically, all libraries should be pooled to maintain statistical
-validity during peak calling:
-\begin{quote}
-Assume there are no self-ligation events. Any outward-facing tag pairs are
-generated from inter-ligation events and will be correlated with the other 
-strand orientations. Peak calling on outward-facing homo-linker tag pairs will
-then select for interactions with large homo-linker counts (based on the other
-orientations). This compromises the independence between peak definition and
-statistical testing.  In particular, interactions are likely to be selected
-that have spurious differences between homo- and hetero-linker counts.
-\end{quote}
-In practice, this is not an issue as self-ligation events should dominate the
-outward-facing tag pairs. This means that only homo-linker directories need to
-be used for peak calling. Relatively few outward-facing tag pairs should be
-present for hetero-linker directories anyway.
+Technically, all libraries should be pooled to maintain statistical validity during peak calling.
+This ensures that the called peaks are independent of the downstream hypothesis tests for specificity.
+In practice, this is not an issue as self-ligation events should dominate the outward-facing tag pairs. 
+This means that only homo-linker directories need to be used for peak calling. 
+Relatively few outward-facing tag pairs should be present for hetero-linker directories anyway.
 
-The tags themselves are stored as if they were generated from a ChIP-seq
-experiment. For each outward pair, the left tag is mapped to the reverse strand
-for a ChIA-PET experiment, but must be switched to the forward strand to mimic
-a ChIP-seq experiment. The same logic applies for the right tag. Only one tag
-is taken from each fragment to mimic single-end data, given that most
-peak-callers cannot handle paired-end experiments. 
+% Assume there are no self-ligation events. 
+% Any outward-facing tag pairs are generated from inter-ligation events and will be correlated with the other strand orientations. 
+% Peak calling on outward-facing homo-linker tag pairs will select for interactions with large homo-linker counts (based on the other orientations). 
+% This compromises the independence between peak definition and % statistical testing.  
+% In particular, interactions are likely to be selected that have spurious differences between homo- and hetero-linker counts.
+
+The tags themselves are stored as if they were generated from a ChIP-seq experiment. 
+For each outward pair, the left tag is mapped to the reverse strand for a ChIA-PET experiment, but must be switched to the forward strand to mimic a ChIP-seq experiment. 
+The same logic applies for the right tag. 
+Only one tag is randomly taken from each fragment to mimic single-end data, given that most peak-callers cannot handle paired-end experiments. 
 
 \subsection{Reading peaks and checking widths}
-So, assume that you got your peak-caller to save the results in
-\code{peak.file}. In this case, MACS was called with the command \code{macs14
--t pooled.bed -f BED -n here -{}-nomodel}. The peaks can then be loaded into a
-\code{GRanges} object after peak calling, as shown below:
+So, assume that you got your peak-caller to save the results in \code{peak.file}. 
+In this case, MACS was called with the command \code{macs14 -t pooled.bed -f BED -n here -{}-nomodel}. 
+The peaks can then be loaded into a \code{GRanges} object after peak calling, as shown below:
 
 <<>>=
 peak.file <- "here_peaks.bed"
@@ -424,11 +393,10 @@ peaks <- GRanges(peak.tab[,1], IRanges(peak.tab[,2], peak.tab[,3]))
 peaks
 @
 
-It is a good idea to check the widths of the identified peaks. For some peak
-callers, very small intervals will be identified so it may be necessary to
-expand the width of each peak. In this case, all peaks are expanded to 2 kbp in
-width and any overlapping peaks are merged. This minimum width is justified as
-being twice the (estimated) average fragment length for this dataset.
+It is a good idea to check the widths of the identified peaks. 
+For some peak callers, very small intervals will be identified so it may be necessary to expand the width of each peak. 
+In this case, all peaks are expanded to 2 kbp in width and any overlapping peaks are merged. 
+This minimum width is justified as being twice the (estimated) average fragment length for this dataset.
 
 <<>>=
 summary(width(peaks))
@@ -437,12 +405,10 @@ peaks <- reduce(peaks)
 peaks
 @
 
-For each pair of peaks, the number of tag pairs is counted based on the
-presence of the $3'$ end of one tag within each peak interval. This represents
-the number of connections between two binding sites. The counting can be
-performed using the \code{recountPET} function with filtering on the count sum
-as previously described. Reverse read extension can also be done but this is
-probably unnecessary. 
+For each pair of peaks, the number of tag pairs is counted based on the presence of the $3'$ end of one tag within each peak interval. 
+This represents the number of connections between two binding sites. 
+Counting can be performed using the \code{recountPET} function with filtering on the count sum as previously described. 
+Reverse read extension can also be done but this is probably unnecessary. 
 
 <<>>=
 peaked <- recountPET(curdirs, peaks, filter=20L)
@@ -450,24 +416,21 @@ head(peaked$counts)
 @
 
 \section{Aggregating homo- and hetero-linker counts}
-As previously mentioned, the aim of the analysis is to compare homo- and
-hetero-linker counts. The presence of separate AA and BB counts is redundant
-for this purpose. To simplify the count matrix, the homo-linker counts for each
-library can be added together. This is done with the \code{compressMatrix}
-function for either the binning or peak-based counts. 
+As previously mentioned, the aim of the analysis is to compare homo- and hetero-linker counts. 
+The presence of separate AA and BB counts is redundant for this purpose. 
+To simplify the count matrix, the homo-linker counts for each library can be added together. 
+This is done with the \code{compressMatrix} function for either the binned or peak-based counts. 
 
 <<>>=
 freqs <- compressMatrix(actual, is.het, libname)
 head(freqs$counts)
 @
 
-The total number of tag pairs in each library is also computed. Note that this
-refers to each library rather than each directory, such that each total
-includes tag pairs from all linker combinations. All homo-/hetero-linker counts
-from the same library are assigned the same total. This is appropriate as
-sequencing depth is the same for all counts sourced from the same library.
-Differences in homo-/hetero-linker counts within a library should not be
-attributed to differences in sequencing depth.
+The total number of tag pairs in each library is also computed. 
+Note that this refers to each library rather than each directory, such that each total includes tag pairs from all linker combinations. 
+Thus, all homo-/hetero-linker counts from the same library are assigned the same total. 
+This is appropriate as sequencing depth is the same for all counts sourced from the same library.
+Differences in homo-/hetero-linker counts within a library should not be attributed to differences in sequencing depth.
 
 <<>>=
 freqs$totals
@@ -483,22 +446,20 @@ freqs$totals
 \section{Filtering to remove uninteresting features}
 
 \subsection{By distance}
-Local interactions are frequently observed as pairs of the same or adjacent
-regions. These are usually uninteresting as they are inevitable consequences of
-chromatin compaction. The gap distance between the interacting regions can be
-computed with the \code{getDistance} function. This refers to the distance
-between the interacting regions on the same chromosome. 
+Local interactions are frequently observed as pairs of the same or adjacent regions. 
+These are usually uninteresting as they are inevitable consequences of chromatin compaction. 
+The gap distance between the interacting regions can be computed with the \code{getDistance} function. 
+This refers to the distance between the interacting regions on the same chromosome. 
 
 <<>>=
 gapped <- getDistance(freqs)
 summary(gapped)
 @
 
-Local interactions can then be discarded by putting a minimum threshold on the
-gap. This avoids confounding the results with many genuine yet uninteresting
-local interactions. For the binning strategy, setting a minimum gap of 1 or
-more will select for pairs of bins that are non-adjacent. Any inter-chromosomal
-pairs are marked as \code{NA} and must also be included.
+Local interactions can then be discarded by putting a minimum threshold on the gap. 
+This avoids confounding the results with many genuine yet uninteresting local interactions. 
+For the binning strategy, setting a minimum gap of 1 or more will select for pairs of bins that are non-adjacent. 
+Any inter-chromosomal pairs are marked as \code{NA} and must also be included.
 
 <<>>=
 keep <- gapped > 1 | is.na(gapped)
@@ -512,13 +473,11 @@ sum(keep)
 
 \subsection{By abundance}
 \label{sec:filtering}
-Low-abundance interactions are those with low tag pair counts. These do not
-provide enough evidence for rejection of the null hypothesis. They are also
-more likely to represent weak and uninteresting non-specific ligation events.
-Removal of these interactions can improve the sensitivity of the analysis by
-reducing the total number of tests and mitigating the severity of the multiple
-testing correction. Filtering on the average count-per-million (CPM) is
-generally recommended under the NB model.
+Low-abundance interactions are those with low tag pair counts. 
+These do not provide enough evidence for rejection of the null hypothesis. 
+They are also more likely to represent weak and uninteresting non-specific ligation events.
+Removal of these interactions can improve the sensitivity of the analysis by reducing the total number of tests and mitigating the severity of the multiple testing correction. 
+Filtering on the average count (as computed by the aveLogCPM function in edgeR \citep{mccarthy2010glm}) is recommended under the NB model.
 
 <<>>=
 require(edgeR)
@@ -526,25 +485,19 @@ a.cpm <- aveLogCPM(freqs$counts, lib.size=freqs$totals)
 summary(a.cpm)
 @
 
-The average count is useful as it is approximately independent of the $p$-value
-for any downstream tests \citep{lun2014denovo}. This ensures that the filtering
-procedure will not affect the validity of the ensuing statistical analysis. Of
-course, some caution is required lest all the interesting interactions be
-removed.  In this case, a relatively mild threshold is used as the bulk of
-filtering has already been performed with \code{filter} during count loading.
+The average count is useful as it is approximately independent of the $p$-value for any downstream tests \citep{lun2014denovo}.
+This ensures that the filtering procedure will not affect the validity of the ensuing statistical analysis. 
+Of course, some caution is required lest all the interesting interactions be removed.  
+In this case, a relatively mild threshold is used given that the bulk of filtering has already been performed with \code{filter} during count loading.
 
 <<>>=
 keep <- a.cpm > -1
 freqs$counts <- freqs$counts[keep,]
 freqs$pairs <- freqs$pairs[keep,]
-sum(keep)
+summary(keep)
 @
 
-A more educated choice of filter threshold can be obtained by identifying
-putative genuine interactions as those that have say, a \code{X}-fold higher
-average abundance than a non-specific interaction. If one assumes that most of
-the interaction space is filled with non-specific contacts, it is simple to
-calculate the threshold based on the abundance of those contacts. 
+A more educated choice of filter threshold can be obtained by identifying putative genuine interactions as those that have say, a \code{X}-fold higher average abundance than a non-specific interaction. If one assumes that most of the interaction space is filled with non-specific contacts, it is simple to calculate the threshold based on the abundance of those contacts. 
 
 <<>>=
 X <- 50000
@@ -556,10 +509,9 @@ size.adjust <- 2*log2(binsize/countwidth)
 threshold + log2(X) - size.adjust
 @
 
-Note that large bins are required to count  non-specific contacts due to the
-sparsity in the interaction space. This means that some adjustments for size
-are necessary to compare the average non-specific abundance to the average
-abundance of each bin pair of interest.
+Note that larger bins are required to count non-specific contacts due to the sparsity in the interaction space. 
+This means that some adjustments for size are necessary to compare the average non-specific abundance to the average abundance of each bin pair of interest.
+The above code adjusts for the differences in the \textit{areas} of the interaction space that were used for tag pair collection with each bin size.
 
 % You might well ask, why bother doing the testing if you're just going to
 % select for it here? The answer is that this selection doesn't compute
