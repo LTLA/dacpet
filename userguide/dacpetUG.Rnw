@@ -117,7 +117,7 @@ readers will have to modify the code according to their own circumstances.
 Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has a linker and tag component. 
 The linker sequence must be identified as either A or B for downstream analysis.
 Then, it must be removed so that the tag can be aligned to the reference genome.
-This can be achieved with the \code{splitLinkers} function which takes two FastQ files of tag-linker pairs and generates several paired FastQ files.
+Removal can be achieved with the \code{splitLinkers} function, which takes two FastQ files of tag-linker pairs and generates several paired FastQ files.
 Each pair of files contains the tag pairs corresponding to each linker combination, i.e., AA, BB, AB or other/unknown.
 
 <<eval=FALSE>>=
@@ -148,11 +148,9 @@ They will be used later to assess the reproducibility of the identified interact
 \section{Converting BAM files to tag directories}
 Repeated parsing of the BAM file is quite laborious for routine analyses.
 Instead, the BAM file is parsed once to generate a processed tag directory.
-Each directory contains a number of files, each of which contains all tag pairs
-mapped between a particular pair of chromosomes. Information can then be
-extracted efficiently from the tag directory for downstream processing. This
-parsing is performed using the \code{preparePET} function to generate a
-directory for each BAM file in the dataset. 
+Each directory contains a number of files, each of which contains all tag pairs mapped between a particular pair of chromosomes. 
+Information can then be extracted efficiently from the tag directory for downstream processing. 
+This parsing is performed using the \code{preparePET} function to generate a directory for each BAM file in the dataset. 
 
 <<>>=
 incoming <- bamfiles[1]
@@ -160,60 +158,50 @@ outcoming <- sub("\\.bam", "", incoming)
 out <- preparePET(incoming, dir=outcoming, minq=20, dedup=TRUE)
 @
 
-The value of \code{minq} describes the minimum mapping quality score (MAPQ) for
-aligned tags. Both tags in each pair must have a MAPQ above \code{minq} for
-that pair to be reported in the directory. A reasonably stringent value is
-recommended given that alignment of short tags is likely to be error-prone.
-The \code{dedup} value specifies whether or not marked duplicates should be
-removed. This is recommended as the chance of obtaining exactly overlapping
-pairs is low. Any overlaps are likely to be PCR duplicates rather than genuine
-enrichment. The numbers of pairs with at least one poorly mapped or duplicate
-tag can be examined in the output:
+The value of \code{minq} describes the minimum mapping quality score (MAPQ) for aligned tags. 
+Both tags in each pair must have a MAPQ above \code{minq} for that pair to be reported in the directory. 
+A reasonably stringent value is recommended given that alignment of short tags is likely to be error-prone.
+Similarly, the \code{dedup} value specifies whether or not marked duplicates should be removed. 
+This is recommended as the chance of obtaining exactly overlapping pairs is low. 
+Any overlaps are likely to be technical artifacts from PCR duplication during library preparation.
+The numbers of pairs with at least one poorly mapped or duplicate tag can be examined in the output:
 
 <<>>=
 out$pairs
 @
 
-In most cases, the duplicate tags are also those with low mapping qualities as
-the aligner tends to place unknown sequences within alignable regions. The
-total number of tag pairs is also shown, along with the number of pairs that
-are retained in the final directory. You can also have a look at the number of
-single tags or those with more than two alignments. These should be
-non-existent, otherwise it suggests that the BAM file is malformed.
+In most cases, the duplicate tags are also those with low mapping qualities as the aligner tends to place unknown sequences within alignable regions. 
+The total number of tag pairs is also shown, along with the number of pairs that are retained in the final directory. 
+You can also have a look at the number of single tags or those with more than two aligned segments. 
+These should be non-existent, otherwise it suggests that the BAM file is malformed.
 
 <<>>=
 out$other
 @
 
-For brevity, this processing step is only performed here for one BAM file. Real
-analyses should run this function over a loop for all files as required.
+For brevity, this processing step is only performed here for one BAM file. 
+Real analyses should run this function over a loop for all files as required.
 
 \section{Diagnosing ligation quality}
 
 \subsection{Making strand orientation plots}
 \label{ssec:strorient}
-Some diagnostics can be pulled out of each processed directory using the
-\code{diagnosePET} function. This extracts the strand information for
-inter-chromosomal tag pairs, i.e., those mapped to different chromosomes.  Each
-code refers to the combination of strands to which each pair is mapped, i.e.,
-both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2})
-and both reverse (\code{3}). As you can see, these numbers are fairly balanced
-as ligation between different pieces of DNA can generate any combination of
-strands.
+Some diagnostics can be pulled out of each processed directory using the \code{diagnosePET} function. 
+This extracts the strand information for inter-chromosomal tag pairs, i.e., those mapped to different chromosomes.  
+Each code refers to the combination of strands to which each pair is mapped, i.e., both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2}) and both reverse (\code{3}). 
+As you can see, these numbers are fairly balanced as ligation between different pieces of DNA can generate any combination of strands.
 
 <<>>=
 diag <- diagnosePET(outcoming)
 diag$inter
 @
 
-The function will also collect strand and gap information for intra-chromosomal
-tag pairs. In this case, the ``first'' tag is that which maps at a lower
-position.  This means that a code of \code{1} marks an inward-facing tag pair
-whereas a code of \code{2} marks an outward-facing tag pair. The gap distance
-refers to the distance between tag positions on the same chromosome. The
-distribution of gaps can then be examined for each strand orientation
-\citep{jin2013highres}. The average distribution of codes \code{0} and \code{3}
-is shown as both involve alignment to the same strand.
+The function will also collect strand and gap information for intra-chromosomal tag pairs. 
+In this case, the ``first'' tag is that which maps at a lower position on the same chromosome.
+This means that a code of \code{1} marks an inward-facing tag pair whereas a code of \code{2} marks an outward-facing tag pair. 
+The gap distance refers to the distance between tag positions on the same chromosome. 
+The distribution of gaps can then be examined for each strand orientation \citep{jin2013highres}. 
+The average distribution of codes \code{0} and \code{3} is shown as both involve alignment to the same strand.
 
 <<eval=FALSE,label=strorient>>=
 lgap <- log2(diag$gap+1)
@@ -237,26 +225,21 @@ legend("topright", c("inward", "outward", "same"), col=c("darkgreen", "red", "bl
 \end{center}
 
 The spike in outward-facing tag pairs is consistent with self-ligation events.
-This occurs when a DNA fragment ligates to itself to form a circle. Subsequent
-cleavage and sequencing over the ligation junction can only generate
-outward-facing pairs upon alignment. In contrast, inter-ligation events between
-DNA fragments can generate any of the strand orientation. This explains the
-balance that is observed between the distributions at higher gap sizes.
+This occurs when a DNA fragment ligates to itself to form a circle. 
+Subsequent cleavage and sequencing over the ligation junction can only generate outward-facing pairs upon alignment. 
+In contrast, inter-ligation events between DNA fragments can generate any of the strand orientation. 
+This explains the balance that is observed between the distributions at higher gap sizes.
 
-It's worth pointing out that no skews in strand orientation should exist for
-the AB library. This is because all AB pairs should be formed by inter-ligation
-events. The presence of any self-ligation spikes is probably caused by
-spillover from linker assignment errors. The majority of AB tag pairs are
-inter-chromosomal so the absolute number of spillover pairs is usually
-negligble, regardless of the size of the peak in those plots.
+It's worth pointing out that no skews in strand orientation should exist for the AB library. 
+This is because all AB pairs should be formed by inter-ligation events. 
+The presence of any self-ligation spikes is probably caused by spillover from linker assignment errors. 
+The majority of AB tag pairs are inter-chromosomal so the absolute number of spillover pairs is usually negligble, regardless of the size of the peak in those plots.
 
 \subsection{Mopping up outward-facing tag pairs}
-Self-ligation events provide no information with respect to interactions
-between DNA fragments. Moreover, they can confound the analysis by masking
-genuine interactions during counting. Any tag pairs corresponding to
-self-ligation events should be removed with the \code{stripOutwardPET}
-function. The spike in the plot above is mostly gone at a gap distance of 25
-kbp, so all outward-facing PETs with lower gap distances will be removed.
+Self-ligation events provide no information with respect to interactions between DNA fragments. 
+Moreover, they can confound the analysis by masking genuine interactions during counting. 
+Any tag pairs corresponding to self-ligation events should be removed with the \code{stripOutwardPET} function. 
+This is done by removing all pairs contributing to the spike in the plot above, i.e., outward-facing pairs at gap distances below 25 kbp.
  
 <<>>=
 stripfile <- paste0(outcoming, "_strip.tsv")
