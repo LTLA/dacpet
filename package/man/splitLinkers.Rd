@@ -5,7 +5,7 @@
 \description{Separate ChIA-PET read pairs into FastQ files for each linker combination.}
 
 \usage{
-splitLinkers <- function(fastq1, fastq2, linkerA, linkerB,
+splitLinkers(fastq1, fastq2, linkerA, linkerB,
 	min.score=10, start=NA, prefix="out", read.prefix=NULL)
 }
 
