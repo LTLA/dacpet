@@ -2,14 +2,14 @@
 \alias{diagnosePET}
 
 \title{Diagnose problems with ChIA-PET data}
-\description{Extract strand and gap diagnostic information from a processed directory}
+\description{Extract strand and gap diagnostic information from a processed tag file}
 
 \usage{
-diagnosePET(dir, restrict=NULL)
+diagnosePET(file, restrict=NULL)
 }
 
 \arguments{
-\item{dir}{a character string specifying a file path to a tag directory}
+\item{file}{a character string specifying a file path to a tag file}
 \item{restrict}{a character vector containing the chromosomes to be analyzed}
 }
 
@@ -54,7 +54,7 @@ Jin F et al. (2013). A high-resolution map of the three-dimensional chromatin in
 
 \examples{
 out <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out, dir="gunk")
+stats <- preparePET(out, "gunk")
 blah <- diagnosePET("gunk")
 print(blah$inter)
 

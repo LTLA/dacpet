@@ -1,24 +1,24 @@
 \name{mergePET}
 \alias{mergePET}
 
-\title{Merge tag directories}
-\description{Merge tag directories from multiple libraries}
+\title{Merge tag files}
+\description{Merge tag files generated from multiple libraries}
 
 \usage{
-mergePET(dirs, out)
+mergePET(files, file.out)
 }
 
 \arguments{
-\item{dirs}{a character vector containing paths to tag directories to be merged}
-\item{out}{a character string specifying the path to store the merged directory}
+\item{files}{a character vector containing paths to tag directories to be merged}
+\item{file.out}{a character string specifying the path to store the merged directory}
 }
 
 \details{
-This simply concatenates the files in each tag directory corresponding to the
-same pair of chromosomes, and produces a new file in \code{out}. It does so
+This simply concatenates the objects in each HDF5 tag file corresponding to the
+same pair of chromosomes, and produces a new file in \code{file.out}. It does so
 for each pair of chromosomes. This is useful for merging together technical
 replicates prior to downstream processing. Note that the user is responsible for 
-ensuring that all merged directories have the same linker combination.
+ensuring that all merged files have the same linker combination.
 }
 
 \value{An invisible \code{NULL} is returned}
@@ -31,8 +31,8 @@ ensuring that all merged directories have the same linker combination.
 
 \examples{
 out1 <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out1, dir="gunkAA")
+stats <- preparePET(out1, "gunkAA")
 out2 <- system.file("exdata", "li_BB.bam", package="dacpet")
-stats <- preparePET(out2, dir="gunkBB")
+stats <- preparePET(out2, "gunkBB")
 mergePET(c("gunkAA", "gunkAB"), "gunk_homo")
 }

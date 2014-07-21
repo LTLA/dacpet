@@ -2,15 +2,15 @@
 \alias{plotChIA}
 
 \title{Plot tag pairs}
-\description{Make a plaid plot of tag pairs from a processed tag directory}
+\description{Make a plaid plot of tag pairs from a processed tag file}
 
 \usage{
-plotChIA(dir, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
+plotChIA(file, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
 	width=1000, cap=50, xlab=NULL, ylab=NULL, col="red", diag=TRUE, ...)
 }
 
 \arguments{
-\item{dir}{a character string a containing path to a processed tag directory}
+\item{file}{a character string containing a path to a processed tag file}
 \item{anchor}{a \code{GRanges} object specifying the anchor region, or a character string specifying the anchor chromosome}
 \item{anchor.lim}{a numeric vector of length 2, specifying the coordinates of the anchor region}
 \item{target}{a \code{GRanges} object specifying the target region, or a character string specifying the target chromosome}
@@ -59,7 +59,7 @@ interactions reveals folding principles of the human genome. \emph{Science}
 
 \examples{
 out1 <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out1, dir="gunkAA")
+stats <- preparePET(out1, "gunkAA")
 
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=5e6, cap=1)
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=1e6, cap=1)

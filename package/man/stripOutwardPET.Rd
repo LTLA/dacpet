@@ -2,15 +2,15 @@
 \alias{stripOutwardPET}
 
 \title{Strip outward-facing PETs}
-\description{Remove outward-facing tag pairs from a tag directory}
+\description{Remove outward-facing tag pairs from a tag file}
 
 \usage{
-stripOutwardPET(dir, out=NULL, min.gap=1e4, discard.to=NULL)
+stripOutwardPET(file.in, file.out=file.in, min.gap=1e4, discard.to=NULL)
 }
 
 \arguments{
-\item{dir}{a character string specifying the tag directory to process}
-\item{out}{a character string specifying the path for the output directory}
+\item{file.in}{a character string specifying the tag file to process}
+\item{file.out}{a character string specifying the path for the output tag file}
 \item{min.gap}{a numeric scalar indicating the minimum gap for outward-facing read pairs}
 \item{discard.to}{a character string specifying a file ppath to deposit discarded read pairs}
 }
@@ -27,8 +27,8 @@ extracting the gap for each strand orientation with \code{\link{diagnosePET}},
 and plotting the distribution of gaps. The chosen threshold should be 
 the smallest distance at which the strand orientations are balanced.
 
-If \code{out} is not specified, the operation will work on the directory specified
-in \code{dir} to remove outward-facing read pairs. If \code{discard.to} is 
+If \code{file.out} is not specified, the operation will overwrite the tag file specified
+in \code{file.in} to remove outward-facing read pairs. If \code{discard.to} is 
 specified, the 5' end locations of each discarded outward-facing read pair
 will be recorded in the specified file. This is useful for further analyses,
 e.g., with peak calling to identify binding sites.
@@ -50,18 +50,18 @@ Jin F et al. (2013). A high-resolution map of the three-dimensional chromatin in
 
 \examples{
 out <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out, dir="gunk")
+stats <- preparePET(out, "gunk")
 
 # Saves to a separate directory.
-x <- stripOutwardPET("gunk", out="temp")
+x <- stripOutwardPET("gunk", "temp")
 print(x)
 
 # Generates an ouput file.
-x <- stripOutwardPET("gunk", out="temp", discard.to="whee.tsv")
+x <- stripOutwardPET("gunk", "temp", discard.to="whee.tsv")
 print(x)
 
 # Milder removal.
-x <- stripOutwardPET("gunk", out="temp", min.gap=1000)
+x <- stripOutwardPET("gunk", "temp", min.gap=1000)
 print(x) 
 
 # Overwrites current directory.

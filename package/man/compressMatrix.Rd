@@ -46,11 +46,11 @@ count in a library, and each row corresponds to a pair of windows}
 
 \examples{
 out1 <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out1, dir="gunkAA")
+stats <- preparePET(out1, "gunkAA")
 out2 <- system.file("exdata", "li_BB.bam", package="dacpet")
-stats <- preparePET(out2, dir="gunkAB")
+stats <- preparePET(out2, "gunkAB")
 out3 <- system.file("exdata", "li_BB.bam", package="dacpet")
-stats <- preparePET(out2, dir="gunkBB")
+stats <- preparePET(out2, "gunkBB")
 
 status <- c("gunkAA", "gunkAB", "gunkBB")
 is.hetero <- grepl("AB$", status)

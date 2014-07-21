@@ -29,7 +29,7 @@ regions.
 
 \examples{
 out1 <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out1, dir="gunkAA")
+stats <- preparePET(out1, "gunkAA")
 data <-countPET("gunkAA", width=1000000, filter=0L)
 summary(getDistance(data))
 }

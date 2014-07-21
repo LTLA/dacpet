@@ -5,11 +5,11 @@
 \description{Extract tag pair counts for interactions between the mitochondrial and nuclear chromosomes}
 
 \usage{
-extractMito(dir, self=FALSE, restrict=NULL, name="chrM")  
+extractMito(file, self=FALSE, restrict=NULL, name="chrM")  
 }
 
 \arguments{
-\item{dir}{a character string specifying a file path to a tag directory}
+\item{file}{a character string specifying a file path to a tag file}
 \item{self}{a logical scalar indicating whether read pairs mapped wholly to the mitochondrial genome should be counted}
 \item{restrict}{a character vector containing the nuclear chromosomes to be analyzed}
 \item{name}{character string specifying the name of the mitochondrial genome}
@@ -26,7 +26,7 @@ Specifically, counts can be extracted for each interaction between the
 mitochondrial genome as a whole and any nuclear chromosome in \code{restrict}
 (all are used by default). If \code{self=TRUE}, intra-chromosomal read pairs on
 the mitochondrial genome will also be counted. This should be performed for the
-tag directory corresponding to each linker combination for a single library.
+tag file corresponding to each linker combination for a single library.
 
 Analysis of the counts usually proceeds with Pearson's chi-squared test,
 to check whether or not a random ligation model is appropriate. More general
@@ -44,7 +44,7 @@ Aaron Lun
 
 \examples{
 out <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out, dir="gunk")
+stats <- preparePET(out, "gunk")
 sum(extractMito("gunk"))
 sum(extractMito("gunk", self=TRUE))
 
@@ -52,7 +52,7 @@ sum(extractMito("gunk", self=TRUE))
 sum(extractMito("gunk", name="chrY"))
 sum(extractMito("gunk", self=TRUE, name="chr1"))
 
-# Pretend to have a sum of mito:nuclear counts for AA, AB and BB directories.
+# Pretend to have a sum of mito:nuclear counts for AA, AB and BB files.
 all.aa <- 22
 all.ab <- 57
 all.bb <- 53

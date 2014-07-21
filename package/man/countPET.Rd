@@ -5,11 +5,11 @@
 \description{Count PETs into pairs of windows across the interaction space}
 
 \usage{
-countPET(dirs, ext=1L, shift=0L, width=5000, spacing=width, filter=20L, restrict=NULL)
+countPET(files, ext=1L, shift=0L, width=5000, spacing=width, filter=20L, restrict=NULL)
 }
 
 \arguments{
-\item{dirs}{a character vector containing paths to the processed tag directories}
+\item{files}{a character vector containing paths to the processed tag files}
 \item{ext}{an integer scalar specifying the fragment length for read extension }
 \item{shift}{an integer scalar specifying the starting location of the first window}
 \item{width}{an integer scalar denoting the width of each window}
@@ -23,7 +23,7 @@ Consider a set of sliding windows of width equal to \code{width} across the
 genome, starting from \code{1-shift} and hopping along by \code{spacing}.  For
 each pair of windows, a PET is counted if each extended tag overlaps one of the
 windows. This is performed for all pairs of windows in the genome, and for each
-supplied tag directory. Only those window pairs with a sum of counts above
+supplied tag file. Only those window pairs with a sum of counts above
 \code{filter} are retained, to reduce memory usage.
 
 Setting a large \code{width} will increase the size of the collection area in
@@ -70,7 +70,7 @@ be performed using the \code{\link{compressMatrix}} function.
 
 \value{
 A list containing:
-\item{counts}{an integer matrix with one column per directory, specifying the count for each window pair}
+\item{counts}{an integer matrix with one column per input file, specifying the count for each window pair}
 \item{totals}{an integer vector specifying the total number of PETs in each directory}
 \item{pairs}{a dataframe with integer fields, containing the start/end indices and the index of the count matrix for each group of window pairs}
 \item{region}{a \code{GRanges} object containing the genomic coordinates of each window}
@@ -85,11 +85,11 @@ A list containing:
 
 \examples{
 out1 <- system.file("exdata", "li_AA.bam", package="dacpet")
-stats <- preparePET(out1, dir="gunkAA")
+stats <- preparePET(out1, "gunkAA")
 out2 <- system.file("exdata", "li_BB.bam", package="dacpet")
-stats <- preparePET(out2, dir="gunkAB")
+stats <- preparePET(out2, "gunkAB")
 out3 <- system.file("exdata", "li_BB.bam", package="dacpet")
-stats <- preparePET(out2, dir="gunkBB")
+stats <- preparePET(out2, "gunkBB")
 
 # Filter is set too high for all of these, and they're shown here only for fun.
 data <- countPET(c("gunkAA", "gunkAB", "gunkBB"))
