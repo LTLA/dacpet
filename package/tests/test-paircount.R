@@ -2,15 +2,20 @@
 # This tests the counting for known pairs.
 
 suppressPackageStartupMessages(require(dacpet))
+suppressPackageStartupMessages(require(rhdf5))
 
 chromos <- c(chrA=1000, chrB=10000, chrC=100000)
-simgen <- function(dir, num) {
-	write.table(file=file.path(dir, "lengths.txt"), data.frame(chr=names(chromos), length=chromos), row.names=FALSE, sep="\t", quote=FALSE)
-  	log<-file.path(dir, "index.txt")
-    if (file.exists(log)) { unlink(log) }
-    counter<-1L
-    for (i in 1:length(chromos)) { 
-        max.anchor<-chromos[[i]];
+simgen <- function(file, num) {
+	if (file.exists(file)) { unlink(file) }
+	h5createFile(file)
+	h5createGroup(file, "counts")
+	h5write(data.frame(chr=names(chromos), length=chromos, stringsAsFactors=FALSE), file, 'lengths')
+    
+	for (i in 1:length(chromos)) { 
+        max.anchor<-chromos[[i]]
+		cur.anchor <- names(chromos)[i]
+		h5createGroup(file, file.path("counts", cur.anchor))
+
         for (j in 1:i) {
             max.target<-chromos[[j]];
             anchors<-as.integer(floor(runif(num, 1, max.anchor)));
@@ -21,18 +26,13 @@ simgen <- function(dir, num) {
                 anchors<-anchor.1;
                 targets<-target.1;
             }
-            astr<-rbinom(num, 1, 0.5)==1
-            tstr<-rbinom(num, 1, 0.5)==1
+            astr<-rbinom(num, 1, 0.5)==1L
+            tstr<-rbinom(num, 1, 0.5)==1L
             anchors[astr]<--anchors[astr]
             targets[tstr]<--targets[tstr]
 			
-            basic<-paste0(counter, ".gz")
-            fname<-file.path(dir, basic)
-            write.table(file=fname, data.frame(anchors, targets), row.names=FALSE,
-                    col.names=c("anchor.pos", "target.pos"), quote=FALSE, sep="\t")
-            write.table(file=log, data.frame(names(chromos)[i], names(chromos)[j], basic),
-                    row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE, append=TRUE)
-            counter<-counter+1L
+			h5write(data.frame(anchor.pos=anchors, target.pos=targets), file,
+				file.path("counts", cur.anchor, names(chromos)[j]))
         }
     }
     return(invisible())
@@ -64,7 +64,12 @@ countcomp <- function(alldirs, regs, ext, filter=1L) {
 
 			collected <- list()
 			for (z in 1:length(alldirs)) {
-                stuff <- read.table(file.path(alldirs[z], cur2[z]), header = TRUE)
+				if (cur2[z]) { 
+            		stuff <- dacpet:::.getPairs(alldirs[z], x, y)
+					attributes(stuff$anchor.pos) <- attributes(stuff$target.pos) <- NULL
+				} else {
+					stuff <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
+				}
 				astart <- ifelse(stuff$anchor.pos > 0, stuff$anchor.pos - ext + 1L, -stuff$anchor.pos)
 				aend <- astart + ext - 1L
 				alap <- findOverlaps(GRanges(x, IRanges(astart, aend)), sregs)
@@ -123,12 +128,10 @@ countcomp <- function(alldirs, regs, ext, filter=1L) {
 
 set.seed(485632481)
 
-dir1<-"blah.out.1"
-dir2<-"blah.out.2"
-dir3<-"blah.out.3"
-dir.create(dir1)
-dir.create(dir2)
-dir.create(dir3)
+dir.create("temp-pair")
+dir1<-"temp-pair/out.1.h5"
+dir2<-"temp-pair/out.2.h5"
+dir3<-"temp-pair/out.3.h5"
 
 simgen(dir1, 200)
 simgen(dir2, 100)
@@ -212,9 +215,7 @@ countcomp(c(dir1, dir2), myreg, 100, filter=5)
 
 ####################################################################################################
 
-unlink(dir1, recursive=TRUE)
-unlink(dir2, recursive=TRUE)
-unlink(dir3, recursive=TRUE)
+unlink("temp-pair", recursive=TRUE)
 
 ####################################################################################################
 # End.

@@ -1,18 +1,20 @@
 ###################################################################################################
 # This tests the interaction counting capabilities of, well, the interaction counter. 
 
-set.seed(1001);
+set.seed(1001)
 suppressPackageStartupMessages(require(dacpet))
+suppressPackageStartupMessages(require(rhdf5))
 chromos<-c(chrA=500, chrB=300)
 
 simgen <- function(dir, num) {
-	write.table(file=file.path(dir, "lengths.txt"), data.frame(chr=names(chromos), length=chromos), 
-			row.names=FALSE, sep="\t", quote=FALSE)
-	log<-file.path(dir, "index.txt")
-	if (file.exists(log)) { unlink(log) }
-	counter<-1L
+	unlink(dir, recursive=TRUE)
+	h5createFile(dir)
+	h5createGroup(dir, "counts")
+	h5write(data.frame(chr=names(chromos), length=as.integer(chromos), stringsAsFactors=FALSE), dir, "lengths")
 	for (i in 1:length(chromos)) { 
-		max.anchor<-chromos[[i]];
+		max.anchor<-chromos[[i]]
+		h5createGroup(dir, file.path('counts', names(chromos)[i]))
+
 		for (j in 1:i) {
 			max.target<-chromos[[j]];
 			anchors<-as.integer(floor(runif(num, 1, max.anchor)));
@@ -28,13 +30,7 @@ simgen <- function(dir, num) {
 			anchors[astr]<--anchors[astr]
 			targets[tstr]<--targets[tstr]
 
-			basic<-paste0(counter, ".gz")
-			fname<-file.path(dir, basic)
-			write.table(file=fname, data.frame(anchors, targets), row.names=FALSE,
-					col.names=c("anchor.pos", "target.pos"), quote=FALSE, sep="\t")
-			write.table(file=log, data.frame(names(chromos)[i], names(chromos)[j], basic),
-					row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE, append=TRUE)
-			counter<-counter+1L
+			h5write(data.frame(anchor.pos=anchors, target.pos=targets), dir, file.path('counts', names(chromos)[i], names(chromos)[j]))
 		}
 	}
 	return(invisible())
@@ -58,7 +54,7 @@ getInterval <- function(pt, ext, left=0, right=0, maxed=NULL) {
 # We set up the comparison function to check our results. 
 
 comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
-	proposed<-countPET(dirs=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing)# restrict="chrA")
+	proposed<-countPET(files=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing)# restrict="chrA")
 	stopifnot(all(rowSums(proposed$count)[proposed$pair$index] >= filter))
 
 	# We check whether the regions make sense.
@@ -85,16 +81,25 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 	if (!identical(checker, proposed$region)) { stop("mismatch in proposed regions") }
 	
 	# We need to determine who's who.
-	x1<-read.table(file.path(dacpet:::.getIndex(dir1)))
-	x2<-read.table(file.path(dacpet:::.getIndex(dir2)))
+	x1<-h5ls(dir1)
+	x2<-h5ls(dir2)
 	for (k in 1:length(chromos)) {
 		cur.k<-names(chromos)[k]
 		for (l in 1:k) {
 			cur.l<-names(chromos)[l]
 
 			# Loading counts.
-			x<-list(read.table(file.path(dir1, x1[x1[,1]==cur.k & x1[,2]==cur.l,3]), header=TRUE),
-				read.table(file.path(dir2, x2[x2[,1]==cur.k & x2[,2]==cur.l,3]), header=TRUE))
+			x <- list()
+			if (!any(x1$group==file.path("/counts", cur.k) & x1$name==cur.l)) {
+				x[[1]] <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
+			} else {
+				x[[1]] <- h5read(dir1, file.path("counts", cur.k, cur.l))
+			}
+			if (!any(x2$group==file.path("/counts", cur.k) & x2$name==cur.l)) { 
+				x[[2]] <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
+			} else {
+				x[[2]] <- h5read(dir2, file.path("counts", cur.k, cur.l))
+			}
 			max.anchor<-chromos[k]
 			aspace<-space.pts[[k]]
 			aoff<-offsets[[k]]
@@ -106,21 +111,23 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 			other<-0
 			for (g in 1:length(x)) {
 				mat1<-matrix(0L, nrow=max.anchor+left, ncol=max.target+left) # Need to +left, as 'space.pts' can exceed chromosome length.
-				for (i in 1:nrow(x[[g]])) {
-					arange<-getInterval(x[[g]][i,1], ext, left=left, right=right, maxed=max.anchor+left)
-					if (arange[2] < arange[1]) { next }
-					arange<-arange[1]:arange[2] 
-					trange<-getInterval(x[[g]][i,2], ext, left=left, right=right, maxed=max.target+left)
-					if (trange[2] < trange[1]) { next }
-					trange<-trange[1]:trange[2]
+				if (nrow(x[[g]])) { 
+					for (i in 1:nrow(x[[g]])) {
+						arange<-getInterval(x[[g]][i,1], ext, left=left, right=right, maxed=max.anchor+left)
+						if (arange[2] < arange[1]) { next }
+						arange<-arange[1]:arange[2] 
+						trange<-getInterval(x[[g]][i,2], ext, left=left, right=right, maxed=max.target+left)
+						if (trange[2] < trange[1]) { next }
+						trange<-trange[1]:trange[2]
 
-					if (k!=l) {
-						mat1[arange,trange]<-mat1[arange,trange]+1L
-					} else {
-						# Reflecting around the diagonal for intra-chromosomals.
-						collected <- unique(c(outer((arange-1L)*nrow(mat1), trange, FUN="+"), 
-											outer((trange-1L)*nrow(mat1), arange, FUN="+")))
-						mat1[collected] <- mat1[collected] + 1L
+						if (k!=l) {
+							mat1[arange,trange]<-mat1[arange,trange]+1L
+						} else {
+							# Reflecting around the diagonal for intra-chromosomals.
+							collected <- unique(c(outer((arange-1L)*nrow(mat1), trange, FUN="+"), 
+								outer((trange-1L)*nrow(mat1), arange, FUN="+")))
+							mat1[collected] <- mat1[collected] + 1L
+						}
 					}
 				}
 				submat1<-mat1[aspace,tspace]
@@ -157,10 +164,9 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 ###################################################################################################
 # Checking a vanilla count.
 
-dir1<-"temp.out.1"
-dir2<-"temp.out.2"
-dir.create(dir1)
-dir.create(dir2)
+dir.create("temp.out")
+dir1<-"temp.out/1.h5"
+dir2<-"temp.out/2.h5"
 
 simgen(dir1, 20)
 simgen(dir2, 10)
@@ -242,8 +248,7 @@ comp(dir1, dir2, ext=55, spacing=36, left=10, right=-10)
 ##################################################################################################
 # Cleaning up.
 
-unlink(dir1, recursive=TRUE)
-unlink(dir2, recursive=TRUE)
+unlink("temp.out", recursive=TRUE)
 
 ##################################################################################################
 # End.

@@ -1,10 +1,11 @@
 # Tests the diagnostic components: diagnosePET, extractMito, stripOutwardPET and mergePET.
 
 suppressPackageStartupMessages(require(dacpet))
+suppressPackageStartupMessages(require(rhdf5))
 	
 all.chrs <- c(chrA=1000, chrB=2000, chrC=3000, chrM=500)
-simdir <- function(dirpath, ntags) {
-	unlink(list.files(dirpath, full=TRUE))
+simdir <- function(file, ntags) {
+	if (file.exists(file)) { unlink(file, recursive=TRUE) }
 	offsets <- c(0L, cumsum(all.chrs))
 	chosen.alpha <- sample(length(all.chrs), ntags, replace=TRUE)
 	chosen.bravo <- sample(length(all.chrs), ntags, replace=TRUE)
@@ -19,18 +20,16 @@ simdir <- function(dirpath, ntags) {
 
 	out <- split(data.frame(anchor.pos=anchor.pos, target.pos=target.pos), anchor.chr)
 	index <- 1L
+	h5createFile(file)
+	h5createGroup(file, "counts")
 	for (x in names(out)) { 
 		reout <- split(out[[x]], target.chr[as.integer(rownames(out[[x]]))])
+		h5createGroup(file, file.path("counts", names(all.chrs)[as.integer(x)]))
 		for (y in names(reout)) {
-			fname <- paste0(index, ".gz")
-			dacpet:::.saveExt(reout[[y]], file.path(dirpath, fname))
-			write.table(data.frame(names(all.chrs)[as.integer(x)], names(all.chrs)[as.integer(y)], fname), file=dacpet:::.getIndex(dirpath),
-				sep="\t", quote=FALSE, col.names=FALSE, row.names=FALSE, append=index!=1L)
-			index <- index + 1L
+			h5write(reout[[y]], file, file.path("counts", names(all.chrs)[as.integer(x)], names(all.chrs)[as.integer(y)]))
 		}	
 	}
-	write.table(data.frame(chr=names(all.chrs), length=all.chrs), sep="\t", quote=FALSE, row.names=FALSE,
-		file=dacpet:::.getLengths(dirpath))
+	h5write(data.frame(chr=names(all.chrs), length=all.chrs, stringsAsFactors=FALSE), file, "lengths")
 	return(data.frame(anchor.chr=names(all.chrs)[anchor.chr], anchor.pos, target.chr=names(all.chrs)[target.chr], target.pos,
 			stringsAsFactors=FALSE))	
 }
@@ -38,8 +37,8 @@ simdir <- function(dirpath, ntags) {
 ###########################################################################################################
 # Testing diagnosePET.
 
-dirpath <- "stuff"
-dir.create(dirpath)
+dir.create("temp-diag")
+dirpath <- "temp-diag/stuff.h5"
 diagcomp <- function(ntags, restrict=NULL) {
 	truth <- simdir(dirpath, ntags)
 	if (!is.null(restrict)) { truth <- truth[truth$anchor.chr %in% restrict & truth$target.chr %in% restrict,] }
@@ -83,23 +82,30 @@ diagcomp(1, restrict=c("chrA"))
 # Testing stripOutwardPET.
 
 stripcomp <- function(ntags, out=NULL, min.gap=100, locale=NULL) {
+	if (is.null(out)) { out <- dirpath }
 	truth <- simdir(dirpath, ntags)
-	stripped <- stripOutwardPET(dirpath, out=out, min.gap=min.gap, discard.to=locale)
+	stripped <- stripOutwardPET(dirpath, file.out=out, min.gap=min.gap, discard.to=locale)
 	retained <- list()
 	
 	# Checking output directory.
-	if (is.null(out)) { out <- dirpath }
-	reported <- read.table(dacpet:::.getIndex(out), stringsAsFactors=FALSE)
+	reported <- h5ls(out)
+	reported <- reported[grepl("^/counts", reported$group) & reported$otype=="H5I_DATASET",]
+
 	for (x in 1:nrow(reported)) { 
-		keep <- truth$anchor.chr==reported[x,1] & truth$target.chr==reported[x,2] 
+		current.a <- basename(reported$group[x])
+		current.t <- reported$name[x]
+
+		keep <- truth$anchor.chr==current.a & truth$target.chr==current.t
 		current <- truth[keep,]
 		lost <- current$anchor.chr==current$target.chr & current$anchor.pos > 0 & current$target.pos < 0 & abs(current$anchor.pos)-abs(current$target.pos) < min.gap
 		current <- current[!lost,c(2,4)]
 		rownames(current) <- NULL
-		blah <- read.table(file.path(out, reported[x,3]), header=TRUE)
+
+		blah <- dacpet:::.getPairs(out, current.a, current.t)
+		attributes(blah$anchor.pos) <- attributes(blah$target.pos) <- NULL
 		if (!identical(current, blah)) { stop("mismatch after stripping out tags") }
 		if (any(lost)) { 
-			retained[[x]] <- data.frame(reported[x,1], -truth$target.pos[keep][lost], truth$anchor.pos[keep][lost], stringsAsFactors=FALSE)
+			retained[[x]] <- data.frame(current.a, -truth$target.pos[keep][lost], truth$anchor.pos[keep][lost], stringsAsFactors=FALSE)
 		}
 	}
 	all.lost <- do.call(rbind, retained)
@@ -167,9 +173,11 @@ mitocomp <- function(ntags) {
 
 	mito <- extractMito(dirpath, self=TRUE)
 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x))) { stop("mismatch in mitocounts") } }
+	print(mito)
 
 	mito <- extractMito(dirpath, self=TRUE, restrict=c("chrA", "chrB"))
 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x))) { stop("mismatch in mitocounts") } }
+	print(mito)
 
 	mito <- extractMito(dirpath)
 	for (x in names(mito)) { if (!identical(mito[[x]], sum(collected==x & x!="chrM"))) { stop("mismatch in mitocounts") } }
@@ -188,28 +196,31 @@ mitocomp(10)
 ###########################################################################################################
 # Testing mergePET.
 
-altpath <- "second.stuff"
-finpath <- "final.stuff"
+altpath <- "temp-diag/second.h5"
+finpath <- "temp-diag/final.h5"
 dir.create(altpath)
 mergecomp <- function(ntags1, ntags2) {
 	t1 <- simdir(dirpath, ntags1)
 	t2 <- simdir(altpath, ntags2)
-	mergePET(c(dirpath, altpath), out=finpath)
+	mergePET(c(dirpath, altpath), file.out=finpath)
 
 	# Checking by ensuring that everyone is present who is meant to be.
-	ref <- read.table(dacpet:::.getLengths(dirpath), header=TRUE)
-	sec <- read.table(dacpet:::.getLengths(altpath), header=TRUE)
-	final <- read.table(dacpet:::.getLengths(finpath), header=TRUE)
+	ref <- h5read(dirpath, 'lengths')
+	sec <- h5read(altpath, 'lengths')
+	final <- h5read(finpath, 'lengths')
 	if (!identical(ref, sec) || !identical(ref, final)) { stop("mismatches in the length files") }
 	
 	# Running through the merged directory, and ensuring everyone is accounted for.
-	indices <- read.table(dacpet:::.getIndex(finpath))
+	indices <- h5ls(finpath)
+	indices <- indices[grepl("^/counts", indices$group) & indices$otype=="H5I_DATASET",]
+
 	hits1 <- integer(nrow(t1))
 	hits2 <- integer(nrow(t2))
 	for (x in 1:nrow(indices)) { 
-		anchor <- indices[x,1]
-		target <- indices[x,2]
-		current <- read.table(file.path(finpath, indices[x,3]), header=TRUE)
+		anchor <- basename(indices$group[x])
+		target <- indices$name[x]
+		current <- dacpet:::.getPairs(finpath, anchor, target)
+		attributes(current$anchor.pos) <- attributes(current$target.pos) <- NULL
 		current <- current[do.call(order, current),]
 
 		keep <- t1$anchor.chr==anchor & t1$target.chr==target
@@ -241,9 +252,7 @@ mergecomp(1, 10)
 ###########################################################################################################
 # Cleaning up the mess.
 
-unlink(dirpath, recursive=TRUE)
-unlink(altpath, recursive=TRUE)
-unlink(finpath, recursive=TRUE)
+unlink("temp-diag", recursive=TRUE)
 unlink(discardee)
 
 ###########################################################################################################

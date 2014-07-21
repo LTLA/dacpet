@@ -2,7 +2,8 @@
 # This script is designed to test the pair-identifying capabilities of dacpet, and whether it
 # saves the results in a proper format.
 
-suppressPackageStartupMessages(require("dacpet"))
+suppressPackageStartupMessages(require(dacpet))
+suppressPackageStartupMessages(require(rhdf5))
 source("simsam.R")
 
 comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10, 
@@ -11,9 +12,9 @@ comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10,
 	spacer<-as.integer(spacer+0.5)
 
 	# Randomly generating reads.
-    names<-paste('x', rep(1:npairs, 2), sep=".");
-    chrs<-sample(length(chromos), length(names), replace=TRUE);
-    pos<-integer(length(names));
+    names<-paste('x', rep(1:npairs, 2), sep=".")
+    chrs<-sample(length(chromos), length(names), replace=TRUE)
+    pos<-integer(length(names))
 
     # Assigning positions to all of them.
     for (i in 1:length(chromos)) {
@@ -22,8 +23,8 @@ comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10,
     }
 
     # Throwing them into the SAM file generator. 
-    str<-rbinom(length(names), 1, 0.5)==1; 
-    sstr<-rbinom(singles, 1, 0.5)==1; 
+    str<-rbinom(length(names), 1, 0.5)==1L
+    sstr<-rbinom(singles, 1, 0.5)==1L
 	reversi<-c(1:npairs+npairs, 1:npairs)
     out<-simsam(fname, names(chromos)[chrs], pos, str, chromos, names=names, len=rlen, 
 			is.first=c(rep(TRUE, npairs), rep(FALSE, npairs)), is.paired=TRUE,
@@ -72,10 +73,9 @@ comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10,
 	################ ACTUAL MATCH ###################
 	# Assembling the output list for comparison.
 
-	tmpdir<-paste0(fname, "_temp")
-	preparePET(out, dir=tmpdir, yield=yield)
-	indices<-dacpet:::.loadIndices(tmpdir)
-	used<-indices
+	tmpf <- paste0(fname, "_temp.h5")
+	diags <- preparePET(out, file=tmpf, yield=yield)
+	used <- indices <- dacpet:::.loadIndices(tmpf) 
 
 	for (i in 1:length(chromos)) {
 		for (j in 1:i) {
@@ -94,19 +94,35 @@ comp<-function (fname, chromos, npairs, singles=0, rlen=10, spacer=10,
 			tchr<-names(chromos)[j]
             used[[achr]][[tchr]]<-NULL
 			if (!(achr%in%names(indices)) || !(tchr %in% names(indices[[achr]]))) { 
-				if (length(o)) { stop("true interactions are missing"); }
-				next; 
+				if (length(o)) { stop("true interactions are missing") }
+				next 
 			}
-			current<-read.table(file.path(tmpdir, indices[[achr]][[tchr]]), header=TRUE, colClasses="integer")
-			current<-current[order(current$anchor.pos, current$target.pos),]
-			if (!identical(current$anchor.pos, cur.anchor[o])) { stop("mismatch in anchor elements") }
-			if (!identical(current$target.pos, cur.target[o])) { stop("mismatch in target elements") }
+			if (!indices[[achr]][[tchr]]) { stop("missing entry in hdf5 file, shouldn't have been added") }
+
+			current <- h5read(tmpf, file.path("counts", achr, tchr))
+			current <- current[order(current$anchor.pos, current$target.pos),]
+			if (!identical(as.vector(current$anchor.pos), cur.anchor[o])) { stop("mismatch in anchor elements") }
+			if (!identical(as.vector(current$target.pos), cur.target[o])) { stop("mismatch in target elements") }
 		}
 	}
 
 	# Checking there's nothing left.
 	if (!is.null(unlist(used))) { stop("files left unused in the directory") }
-	return(head(read.table(file.path(tmpdir, indices[[1]][[1]]), header=TRUE)))
+
+	# Checking diagnostics.
+	stopifnot(all(diags$other[["singles"]]==singles))
+	stopifnot(all(diags$other[["multi"]]==0L))
+	stopifnot(all(diags$pairs[["total"]]==npairs))
+	stopifnot(all(diags$pairs[["valid"]]==npairs))
+	stopifnot(all(diags$pairs[['marked']]==0L))
+	stopifnot(all(diags$pairs[['filtered']]==0L))
+
+	# Checking the length file.
+	chrlen <- h5read(tmpf, "lengths")
+	stopifnot(identical(as.vector(chrlen$chr), names(chromos)))
+	stopifnot(identical(as.vector(chrlen$length), as.vector(chromos)))
+
+	return(head(h5read(tmpf, "counts/chrA/chrA")))
 }
 
 ####################################################################################################
@@ -124,9 +140,9 @@ comp(fname, npairs=100, chromos=chromos);
 
 # Ramping up the aggression in terms of overlap density
 
-comp(fname, npairs=20, chromos=c(chrA=300));
-comp(fname, npairs=50, chromos=c(chrA=300));
-comp(fname, npairs=100, chromos=c(chrA=300));
+comp(fname, npairs=20, chromos=c(chrA=300L));
+comp(fname, npairs=50, chromos=c(chrA=300L));
+comp(fname, npairs=100, chromos=c(chrA=300L));
 
 # Increasing the number of reads all round.
 
