@@ -5,7 +5,7 @@ Title: Differential analyis for ChIA-PET
 Author: Aaron Lun <alun@wehi.edu.au>
 Maintainer: Aaron Lun <alun@wehi.edu.au>
 Depends: R (>= 3.1.0), GenomicRanges
-Imports: Rsamtools
+Imports: Rsamtools, rhdf5
 Suggests: edgeR, Biostrings
 biocViews: Bioinformatics, HighThroughputSequencing, ChIA-PET
 Description: Tests for significantly specific interactions in a ChIA-PET experiment, by exploiting homo- and hetero-linker information. Methods are also provided for linker processing and normalization.

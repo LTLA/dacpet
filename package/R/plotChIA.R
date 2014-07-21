@@ -1,4 +1,4 @@
-plotChIA <- function(dir, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
+plotChIA <- function(file, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
    width=1000, cap=50, xlab=NULL, ylab=NULL, col="red", diag=TRUE, ...)
 # This generates a ChIA-PET plot, akin to the plaid plots for Hi-C data. 
 #
@@ -16,15 +16,13 @@ plotChIA <- function(dir, anchor, anchor.lim=NULL, target=anchor, target.lim=anc
    	if (length(anchor)!=1L || length(anchor.lim)!=2L) { stop("exactly one anchor range is required for plotting") }
     if (length(target)!=1L || length(target.lim)!=2L) { stop("exactly one target range is required for plotting") }
 
-	# Choosing which file to open (accounting for mixed specification of anchor/target, relative to the definition in the directory).
-	indexed<-read.table(.getIndex(dir), stringsAsFactors=FALSE)
-	chosen<-(indexed[,1]==anchor & indexed[,2]==target)
-	reversi<-!any(chosen)
-	if (reversi) { chosen<-(indexed[,2]==anchor & indexed[,1]==target) }
-    if (any(chosen)) { 
-		if (sum(chosen)>1L) { stop("multiple anchor/target combinations in index file") }
-		allpts <- read.table(file.path(dir, indexed[chosen,3]), header=TRUE, colClasses="integer", comment.char="")
-        if (reversi) { allpts[,1:2]<-allpts[,2:1] } 
+	# Choosing which file to open (accounting for mixed specification of anchor/target, relative to the definition in the file).
+	indexed <- .loadIndices(file)
+    if (!is.null(indexed[[anchor]][[target]])) {
+		allpts <- .getPairs(file, anchor, target)
+	} else if (!is.null(indexed[[target]][[anchor]])) {
+		allpts <- .getPairs(file, target, anchor)
+        allpts[,1:2] <- allpts[,2:1] 
 	} else {
 		allpts <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
 	}

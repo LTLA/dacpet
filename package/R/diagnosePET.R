@@ -1,4 +1,4 @@
-diagnosePET <- function(dir, restrict=NULL) 
+diagnosePET <- function(file, restrict=NULL) 
 # This function pulls up PETs and returns their orientation and insert size.
 # The idea is to allow some sort of diagnostics to be performed on each
 # directory based on strand balance and gap data.
@@ -6,7 +6,7 @@ diagnosePET <- function(dir, restrict=NULL)
 # written by Aaron Lun
 # 22 November 2013
 {
-    overall <- .loadIndices(dir)
+    overall <- .loadIndices(file)
 	all.ori <- list()
 	all.gap <- list()
 	all.inter <- integer(4)
@@ -18,7 +18,8 @@ diagnosePET <- function(dir, restrict=NULL)
         for (target in names(current)) {
 	
 			if (!is.null(restrict) && !(target %in% restrict)) { next }
-			stuff<-read.table(file.path(dir, current[[target]]), header=TRUE)
+			if (!current[[target]]) { next }
+			stuff <- .getPairs(file, anchor, target)
 			flagged <- .getFlag(stuff$anchor.pos, stuff$target.pos)
 	
 			if (anchor==target) { 

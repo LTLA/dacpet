@@ -1,4 +1,4 @@
-countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=20L, restrict=NULL) 
+countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter=20L, restrict=NULL) 
 # This function collates counts across multiple experiments to get the full set of results. 
 # It takes a set of directories which it loads in and compiles into a set of weighted counts 
 # for all sliding windows (or mats, in interaction space), in preparation for further analysis.
@@ -6,14 +6,14 @@ countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=
 # written by Aaron Lun
 # 15 January 2014
 {
-	nlibs<-length(dirs)
+	nlibs <- length(files)
 	left <- shift
 	right <- width - shift - 1L
-	if (!is.integer(spacing)) { spacing<-as.integer(spacing) }
-	if (!is.integer(ext)) { ext<-as.integer(ext) }
-	if (!is.integer(left)) { left<-as.integer(left) }
-	if (!is.integer(right)) { right<-as.integer(right) }
-	if (!is.integer(filter)) { filter<-as.integer(filter) }
+	if (!is.integer(spacing)) { spacing <- as.integer(spacing) }
+	if (!is.integer(ext)) { ext <- as.integer(ext) }
+	if (!is.integer(left)) { left <- as.integer(left) }
+	if (!is.integer(right)) { right <- as.integer(right) }
+	if (!is.integer(filter)) { filter <- as.integer(filter) }
 	if (nlibs==0L) { 
 		stop("number of libraries must be positive")
 	} else if (spacing < 1L) { 
@@ -32,30 +32,30 @@ countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=
 	first.pt <- ifelse(at.start, 1L, spacing + 1L)
 
 	# Setting up structures to store results.
-    ptr<-.Call(cxx_create_counts, nlibs)
+    ptr <- .Call(cxx_create_counts, nlibs)
     if (is.character(ptr)) { stop(ptr) }
-	full.sizes<-rep(0L, nlibs)
+	full.sizes <- rep(0L, nlibs)
 	
 	# Checking genome consistency.
-	chromosomes<-NULL
-	for (dir in dirs) {
-		temp<-read.table(.getLengths(dir), header=TRUE)
-		temp2<-temp$length
-		names(temp2)<-temp$chr
-		if (is.null(chromosomes)) { chromosomes<-temp2 }
+	chromosomes <- NULL
+	for (f in files) {
+		temp <- h5read(f, "lengths")
+		temp2 <- as.vector(temp$length)
+		names(temp2) <- temp$chr
+		if (is.null(chromosomes)) { chromosomes <- temp2 }
 		else if (!identical(temp2, chromosomes)) { 
 			stop("chromosome identities and lengths should be the same across files")
 		}
 	}
-	chrs<-names(chromosomes)
+	chrs <- names(chromosomes)
 
 	# Constructing a GRanges object of the windows corresponding to each point.  We
 	# need to know the number of points based on left/right shifts. Also noting the
 	# offset for each chromosome, so we can merge all coordinates into a single object. 
-	windows<-list()
-	offsets<-list()
+	windows <- list()
+	offsets <- list()
 	npts <- list()
-	last.hit<-0L
+	last.hit <- 0L
 	for (chr in names(chromosomes)) {	
 		offsets[[chr]]<-last.hit
 		cur.len <- chromosomes[[chr]]
@@ -76,27 +76,27 @@ countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=
 	seqlengths(windows)<-chromosomes
 
 	# Running through each pair of chromosomes.
-    overall<-.loadIndices(dirs)
+    overall <- .loadIndices(files)
 	colpairs <- coldex <- list()
 	for (anchor in names(overall)) {
 		stopifnot(anchor %in% chrs)
 		if (!is.null(restrict) && !(anchor %in% restrict)) { next }
-		current<-overall[[anchor]]
+		current <- overall[[anchor]]
         for (target in names(current)) {
 			stopifnot(target %in% chrs)
 			if (!is.null(restrict) && !(target %in% restrict)) { next }
-			fnames<-current[[target]]
+			is.present <- current[[target]]
 
 			pulled<-list()
 			for (x in 1:nlibs) {
-				if (!nchar(fnames[x])) { 
-					pulled[[x]]<-data.frame(integer(0), integer(0), integer(0), integer(0))					
+				if (!is.present[x]) { 
+					pulled[[x]] <- data.frame(integer(0), integer(0), integer(0), integer(0))					
 					next 
 				}
-				stuff<-read.table(file.path(dirs[x], fnames[x]), header=TRUE, colClasses="integer", comment.char="")
-				full.sizes[x]<-full.sizes[x]+nrow(stuff)
-				arange<-.forgeInterval(stuff$anchor.pos, ext=ext, spacing=spacing, left=left, right=right, maxed=npts[[anchor]] + 1L, is.first=at.start)
-				trange<-.forgeInterval(stuff$target.pos, ext=ext, spacing=spacing, left=left, right=right, maxed=npts[[target]] + 1L, is.first=at.start)
+				stuff <- .getPairs(files[x], anchor, target)
+				full.sizes[x] <- full.sizes[x]+nrow(stuff)
+				arange <- .forgeInterval(stuff$anchor.pos, ext=ext, spacing=spacing, left=left, right=right, maxed=npts[[anchor]] + 1L, is.first=at.start)
+				trange <- .forgeInterval(stuff$target.pos, ext=ext, spacing=spacing, left=left, right=right, maxed=npts[[target]] + 1L, is.first=at.start)
 
 				if (anchor==target) { 
 					# Need to check who's the anchor, and who's the target, for intrachromosomal
@@ -134,10 +134,7 @@ countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=
 			# Collating the results.
             out<-.Call(cxx_count_chia, ptr, pulled, filter, anchor==target)
 			if (is.character(out)) { stop(out) }
-			colpairs[[length(colpairs)+1L]] <- data.frame(out[[1]]+offsets[[anchor]], 
-#					anchor.end=out[[3]]+offsets[[anchor]]-1L, 
-					out[[2]]+offsets[[target]])
-#					target.end=out[[4]]+offsets[[target]]-1L, 
+			colpairs[[length(colpairs)+1L]] <- data.frame(out[[1]]+offsets[[anchor]], out[[2]]+offsets[[target]])
 			coldex[[length(coldex)+1L]] <- out[[3]]+1L
 		}
 	}
@@ -178,28 +175,30 @@ countPET <- function(dirs, ext=1L, shift=0L, width=5000L, spacing=width, filter=
 
 
 .loadIndices <- function(y)
-# A quick and dirty function for index loading with multiple libraries. This produces a list
-# which describes the necessary file corresponding to each chromosome combination for each 
-# library. This bit is copied straight out of diffHic, so we could probably just call it
-# instead but this'll reduce the dependencies.
+# A quick and dirty function for index loading with multiple libraries. This
+# produces a list which describes the necessary HDF5 object corresponding to
+# each chromosome combination for each library. 
 {
-    indices<-.getIndex(y)
-	overall<-list()
-	ni<-length(indices)
+	overall <- list()
+	ni<-length(y)
 	for (ix in 1:ni) {
-		current<-read.table(indices[ix],stringsAsFactors=FALSE, comment.char="")
-		current<-split(current[,-1], current[,1])
+		current <- h5ls(y[ix])
+		keep <- grepl("^/counts", dirname(current$group)) & current$otype=="H5I_DATASET"
+		all.anchors <- basename(current$group[keep])
+		assorted.info <- current[keep,c("name", "dim")]
+
+		current <- split(assorted.info, all.anchors)
 		for (ac in names(current)) {
 			if (is.null(overall[[ac]])) { overall[[ac]]<-list() }
-			subcur<-current[[ac]]
-			subcur<-split(subcur[,-1], subcur[,1])
-			for (tc in names(subcur)) {
-				if (is.null(overall[[ac]][[tc]])) { overall[[ac]][[tc]]<-character(ni) }
-				overall[[ac]][[tc]][ix]<-subcur[[tc]]
+			subcurrent <- current[[ac]]
+			subcurrent <- split(subcurrent$dim, subcurrent$name)
+			for (tc in names(subcurrent)) {
+				if (is.null(overall[[ac]][[tc]])) { overall[[ac]][[tc]] <- integer(ni) }
+				overall[[ac]][[tc]][ix] <- as.integer(subcurrent[[tc]]) # Dims will be convertible as it stores the number of rows in a data.frame.
 			}
 		}
 	}
 	return(overall)
 }
 
-
+.getPairs <- function(y, anchor, target) { h5read(y, file.path("counts", anchor, target)) }

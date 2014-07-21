@@ -1,4 +1,4 @@
-recountPET <- function(dirs, regions, ext=1L, filter=20L)
+recountPET <- function(files, regions, ext=1L, filter=20L)
 # This counts the number of PETs with each end overlapping one of 
 # the specified regions. It then reports counts for each pair of
 # regions with counts above the specified threshold.
@@ -6,7 +6,7 @@ recountPET <- function(dirs, regions, ext=1L, filter=20L)
 # written by Aaron Lun
 # 23 January, 2014
 {
-    nlibs<-length(dirs)
+    nlibs<-length(files)
     if (!is.integer(ext)) { ext<-as.integer(ext) }
     if (!is.integer(filter)) { filter<-as.integer(filter) }
     if (nlibs==0) {
@@ -21,26 +21,26 @@ recountPET <- function(dirs, regions, ext=1L, filter=20L)
 	chrs <- names(gr)
 
     # Running through each pair of chromosomes.
-    overall <- .loadIndices(dirs)
+    overall <- .loadIndices(files)
     all.coords <- list()
 	all.counts <- list()
 	ix <- 1L
-	totals <- integer(length(dirs))
+	totals <- integer(length(files))
 
     for (anchor in names(overall)) {
         if (! (anchor %in% chrs) ) { next }
         current<-overall[[anchor]]
         for (target in names(current)) {
 			if (! (target %in% chrs)) { next }
-            fnames<-current[[target]]
+            is.okay <- current[[target]]
             
 			pulled <- list()
-			for (x in 1:length(fnames)) { 
-                if (!nchar(fnames[x])) {
+			for (x in 1:length(is.okay)) { 
+                if (!is.okay[x]) {
 					pulled[[x]] <- list(integer(0), integer(0), integer(0))
 					next
 				}
-				stuff<-read.table(file.path(dirs[x], fnames[x]), header=TRUE, colClasses="integer", comment.char="")
+				stuff <- .getPairs(files[x], anchor, target)
 				totals[x] <- totals[x] + nrow(stuff)
 				ar <- .forgeInterval(stuff$anchor.pos, ext=ext, spacing=1L)
 				tr <- .forgeInterval(stuff$target.pos, ext=ext, spacing=1L) 

@@ -9,4 +9,4 @@ export(splitLinkers, preparePET, mergePET,
 	plotChIA)
 
 #  Requires the Rsamtools and GenomicRanges packages.
-import(Rsamtools,GenomicRanges)
+import(Rsamtools,GenomicRanges,rhdf5)

@@ -1,45 +1,39 @@
-mergePET <- function(dirs, out)
+mergePET <- function(files, file.out)
 # Merges a bunch of count directories together, usually to deal with technical
 # replicates.
 #
 # written by Aaron Lun
 # 15 June, 2014
 {
-	overall <- .loadIndices(unlist(dirs))
-	tmpdir<-tempfile(tmpdir=".")
-	dir.create(tmpdir)
-	on.exit({ if (file.exists(tmpdir)) { unlink(tmpdir, recursive=TRUE) } })
-	newindex<-.getIndex(tmpdir)
+	overall <- .loadIndices(files)
+	file.tmp <- tempfile(tmpdir=".", fileext=".h5")
+	on.exit({ if (file.exists(file.tmp)) { unlink(file.tmp) } })
 	sofar<-1L
-	
+	h5createFile(file.tmp)
+	h5createGroup(file.tmp, "counts")
+
 	# Merging for each combination, as necessary.
 	for (ac in names(overall)) {
 		current<-overall[[ac]]
+		h5createGroup(file.tmp, file.path('counts', ac))
 		for (tc in names(current)) {
-			fnames<-current[[tc]]
+			is.okay <- current[[tc]]
 
 			all.tab <- list()
-			for (x in 1:length(fnames)) { 
+			for (x in 1:length(is.okay)) { 
 				current.tab <- NULL
-				if (nchar(fnames[x])) { 
-					current.tab <-read.table(file.path(dirs[x], fnames[x]), header=TRUE, colClasses="integer", comment.char="")
-				}
+				if (is.okay[x]) { current.tab <- .getPairs(files[x], ac, tc) }
 				all.tab[[x]] <- current.tab
 			}
 			all.tab <- do.call(rbind, all.tab)
-
-			ofname<-paste0(sofar, ".gz")
-			.saveExt(all.tab, file.path(tmpdir, ofname))
-			write.table(file=newindex, data.frame(ac, tc, ofname),
-				row.names=FALSE, col.names=FALSE, sep="\t", append=TRUE, quote=FALSE)
-			sofar<-sofar+1L
+			h5write(all.tab, file.tmp, file.path("counts", ac, tc))						
 		}
 	}
 	
 	# Checking the lengths
 	my.lengths <- NULL
-	for (x in dirs) {
-		cur.lengths <- read.table(.getLengths(x), header=TRUE, stringsAsFactors=FALSE)
+	for (x in files) {
+		cur.lengths <- h5read(x, "lengths")
 		cur.lengths <- cur.lengths[order(cur.lengths$chr),]
 		if (is.null(my.lengths)) { 
 			my.lengths <- cur.lengths
@@ -47,10 +41,9 @@ mergePET <- function(dirs, out)
 			stopifnot(identical(my.lengths, cur.lengths))						
 		}
 	}
-	file.copy(.getLengths(dirs[1]), .getLengths(tmpdir))
+	h5write(my.lengths, file.tmp, "lengths")
 
 	# Moving to the output.
-	if (file.exists(out)) { unlink(out, recursive=TRUE) }
-	file.rename(tmpdir, out)
+	file.rename(file.tmp, file.out)
 	return(invisible(NULL))
 }
