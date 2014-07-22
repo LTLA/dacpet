@@ -11,7 +11,10 @@ compressMatrix <- function(data, hetero=NULL, libname=NULL)
 # 21 January, 2014
 {
     if (is.null(hetero)) { hetero <- grepl("AB", data$files) }
-	if (is.null(libname)) { libname <- sub("_(AA|AB|BB|other).*", "", data$files) }
+	if (is.null(libname)) { 
+		libname <- sub("_(AA|AB|BB|other)(\\.[^\\.]+)?$", "", data$files) 
+		if (any(libname==data$files)) { warning("possible error in automatic library name identification") }
+	}
 
 	ndir <- length(hetero)
 	if (ndir!=length(libname) || ndir!=ncol(data$counts)) { stop("inconsistent number of directories in libname, hetero and data") }
