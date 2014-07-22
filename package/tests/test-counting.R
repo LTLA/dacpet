@@ -136,8 +136,7 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 
 				# Subtracting off the elements that we know.
 				wascovered<-matrix(FALSE, nrow(submat1), ncol(submat1))
-				keep<-as.logical(seqnames(proposed$region[proposed$pair$anchor])==cur.k & 
-						seqnames(proposed$region[proposed$pair$target])==cur.l)
+				keep<-as.logical(seqnames(getAnchor(proposed))==cur.k & seqnames(getTarget(proposed))==cur.l)
 				if (any(keep)){ 
 					kept<-proposed$pairs[keep,,drop=FALSE]
 					kept.counts <- proposed$counts[keep,,drop=FALSE]

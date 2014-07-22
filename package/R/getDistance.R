@@ -3,14 +3,26 @@ getDistance <- function(data)
 # NA values indicate interchromosomals, whereas negative values indicate
 # an interaction between overlapping regions.
 {
-	output <- integer(nrow(data$counts))
-	is.intra <- as.logical(seqnames(data$region[data$pairs$anchor])==seqnames(data$region[data$pairs$target]))
+	output <- integer(nrow(data$pairs))
+	ax <- getAnchor(data)
+	tx <- getTarget(data)
+	is.intra <- as.logical(seqnames(ax)==seqnames(tx))
 	output[!is.intra] <- NA
 
-	as <- start(data$region)[data$pairs$anchor[is.intra]]
-	ts <- start(data$region)[data$pairs$target[is.intra]]
-	ae <- end(data$region)[data$pairs$anchor[is.intra]]
-	te <- end(data$region)[data$pairs$target[is.intra]]
-	output[is.intra] <- pmax(as, ts) - pmin(ae, te) - 1L
+	ax <- ax[is.intra]
+	tx <- tx[is.intra]
+	output[is.intra] <- pmax(start(ax), start(tx)) - pmin(end(ax), end(tx)) - 1L
 	return(output)
+}
+
+getAnchor <- function(data) 
+# Gets the requested anchor regions.
+{
+	data$region[data$pairs$anchor]
+}
+
+getTarget <- function(data) 
+# Gets the requested target regions.
+{
+	data$region[data$pairs$target]
 }

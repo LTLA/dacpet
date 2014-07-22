@@ -155,8 +155,7 @@ Type 'q()' to quit R.
 + 
 + 				# Subtracting off the elements that we know.
 + 				wascovered<-matrix(FALSE, nrow(submat1), ncol(submat1))
-+ 				keep<-as.logical(seqnames(proposed$region[proposed$pair$anchor])==cur.k & 
-+ 						seqnames(proposed$region[proposed$pair$target])==cur.l)
++ 				keep<-as.logical(seqnames(getAnchor(proposed))==cur.k & seqnames(getTarget(proposed))==cur.l)
 + 				if (any(keep)){ 
 + 					kept<-proposed$pairs[keep,,drop=FALSE]
 + 					kept.counts <- proposed$counts[keep,,drop=FALSE]
@@ -616,4 +615,4 @@ Type 'q()' to quit R.
 > 
 > proc.time()
    user  system elapsed 
- 71.228   0.415  71.836 
+ 81.027   0.424  81.617 

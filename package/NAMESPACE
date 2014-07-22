@@ -5,7 +5,7 @@ useDynLib(dacpet, .registration=TRUE, .fixes="cxx_")
 export(splitLinkers, preparePET, mergePET,
 	stripOutwardPET, diagnosePET, extractMito,
 	countPET, recountPET, 
-	compressMatrix, getDistance,
+	compressMatrix, getDistance, getAnchor, getTarget,
 	plotChIA)
 
 #  Requires the Rsamtools and GenomicRanges packages.
