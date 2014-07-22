@@ -30,6 +30,7 @@ A list containing:
 \item{pairs}{a dataframe with integer fields, containing the indices of the interacting regions in each pair}
 \item{totals}{an integer vector specifying the total number of PETs in each tag file}
 \item{region}{a \code{GRanges} object containing the genomic coordinates of each region}
+\item{files}{a character vector containing the paths to the processed tag files}
 }
 
 \seealso{

@@ -71,9 +71,10 @@ be performed using the \code{\link{compressMatrix}} function.
 \value{
 A list containing:
 \item{counts}{an integer matrix with one column per input file, specifying the count for each window pair}
-\item{totals}{an integer vector specifying the total number of PETs in each directory}
+\item{totals}{an integer vector specifying the total number of PETs in each tag file}
 \item{pairs}{a dataframe with integer fields, containing the start/end indices and the index of the count matrix for each group of window pairs}
 \item{region}{a \code{GRanges} object containing the genomic coordinates of each window}
+\item{files}{a character vector containing the paths to the processed tag files}
 }
 
 \seealso{
