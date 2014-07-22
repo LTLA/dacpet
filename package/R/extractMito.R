@@ -10,7 +10,7 @@ extractMito <- function(file, self=FALSE, restrict=NULL, name="chrM")
 {
 	# Setting up the output list.
 	collected <- list()
-	all.len <- h5read(file, 'lengths')
+	all.len <- .getLengths(file)
 	for (i in 1:nrow(all.len)) { 
 		cur.chr <- all.len$chr[i]
 		if (is.null(restrict) || cur.chr %in% restrict) { collected[[cur.chr]] <- 0L }

@@ -39,7 +39,7 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 	# Checking genome consistency.
 	chromosomes <- NULL
 	for (f in files) {
-		temp <- h5read(f, "lengths")
+		temp <- .getLengths(f)
 		temp2 <- as.vector(temp$length)
 		names(temp2) <- temp$chr
 		if (is.null(chromosomes)) { chromosomes <- temp2 }
@@ -174,33 +174,3 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 	}
 	return(list(start=pt, end=ender))
 }
-
-
-.loadIndices <- function(y)
-# A quick and dirty function for index loading with multiple libraries. This
-# produces a list which describes the necessary HDF5 object corresponding to
-# each chromosome combination for each library. 
-{
-	overall <- list()
-	ni<-length(y)
-	for (ix in 1:ni) {
-		current <- h5ls(y[ix])
-		keep <- grepl("^/counts", dirname(current$group)) & current$otype=="H5I_DATASET"
-		all.anchors <- basename(current$group[keep])
-		assorted.info <- current[keep,c("name", "dim")]
-
-		current <- split(assorted.info, all.anchors)
-		for (ac in names(current)) {
-			if (is.null(overall[[ac]])) { overall[[ac]]<-list() }
-			subcurrent <- current[[ac]]
-			subcurrent <- split(subcurrent$dim, subcurrent$name)
-			for (tc in names(subcurrent)) {
-				if (is.null(overall[[ac]][[tc]])) { overall[[ac]][[tc]] <- integer(ni) }
-				overall[[ac]][[tc]][ix] <- as.integer(subcurrent[[tc]]) # Dims will be convertible as it stores the number of rows in a data.frame.
-			}
-		}
-	}
-	return(overall)
-}
-
-.getPairs <- function(y, anchor, target) { h5read(y, file.path("counts", anchor, target)) }

@@ -12,9 +12,7 @@ stripOutwardPET <- function(file.in, file.out=file.in, min.gap=1e4, discard.to=N
 	file.tmp <- tempfile(tmpdir=".", fileext=".h5")
 	on.exit({if (file.exists(file.tmp)) { unlink(file.tmp) }})
 
-	h5createFile(file.tmp)
-	h5createGroup(file.tmp, "counts")
-	h5write(h5read(file.in, "lengths"), file.tmp, "lengths")
+	.initializeH5(file.tmp, .getLengths(file.in))
 	discarded <- 0L 
 	if (!is.null(discard.to)) {
 		dhandle <- file(discard.to, open="w")
@@ -47,14 +45,14 @@ stripOutwardPET <- function(file.in, file.out=file.in, min.gap=1e4, discard.to=N
 			
 			if (!nrow(reads)) { next }
 			if (!launcher) { 
-				h5createGroup(file.tmp, file.path('counts', anchor))
+				.addGroup(file.tmp, anchor)
 				launcher <- TRUE
 			}
-			h5write(reads, file.tmp, file.path("counts", anchor, target))
+			.writePairs(file.tmp, anchor, target, reads)
 		}
 	}
 
 	# Moving it to the destination.
-	file.rename(file.tmp, file.out)
+	if (!file.rename(file.tmp, file.out)) { stop("failed to move temporary file to the specified destination") }
 	return(invisible(discarded))
 }

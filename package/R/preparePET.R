@@ -120,27 +120,15 @@ preparePET<-function(bam, file, dedup=TRUE, yield=1e7, minq=NA)
 
 	# We create a HDF5 file. Groups represent anchor chromosomes whereas
 	# individual files represent target chromosomes interacting with those anchors.
-	if (file.exists(file)) { unlink(file) } 
-	h5createFile(file)
-	h5createGroup(file, "counts")
+	.initializeH5(file, len=data.frame(chr=chrs, length=chromosomes, stringsAsFactors=FALSE))
 	for (ax in names(allfiles)) {
-		h5createGroup(file, file.path("counts", ax))
-		for (tx in names(allfiles[[ax]])) {
-			h5write(read.delim(allfiles[[ax]][[tx]], header=TRUE), file, file.path("counts", ax, tx))
+		.addGroup(file, ax)
+		for (tx in names(allfiles[[ax]])) { 
+			.writePairs(file, ax, tx, read.delim(allfiles[[ax]][[tx]], header=TRUE))
 		}
 	}
 
 	# We also need to write in how long the sequences are.
-	h5write(data.frame(chr=chrs, length=chromosomes, stringsAsFactors=FALSE), file, "lengths")
 	return(list(other=c(singles=singles, multi=multies), 
 		pairs=c(total=total, marked=marked, filtered=filtered, valid=valid)))
 }
-
-.getIndex<- function(dir) { file.path(dir, "index.txt") }
-.getLengths<- function(dir) { file.path(dir, "lengths.txt") }
-.saveExt<-function(x, fname) {
-    fopen<-gzfile(fname, open="wb")
-	write.table(file=fopen, x, quote=FALSE, sep="\t", row.names=FALSE, col.names=TRUE)
-	close(fopen)
-}
-

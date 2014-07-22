@@ -5,17 +5,29 @@ mergePET <- function(files, file.out)
 # written by Aaron Lun
 # 15 June, 2014
 {
+	if (length(files)==0L) { stop("must specify non-empty vector of input files") }
+	if (length(files)==1L) { 
+		file.copy(files, file.out)
+		return(invisible(NULL))
+	}
 	overall <- .loadIndices(files)
 	file.tmp <- tempfile(tmpdir=".", fileext=".h5")
 	on.exit({ if (file.exists(file.tmp)) { unlink(file.tmp) } })
-	sofar<-1L
-	h5createFile(file.tmp)
-	h5createGroup(file.tmp, "counts")
+	
+	# Checking the lengths
+	my.lengths <- .getLengths(files[1])
+	my.lengths <- my.lengths[order(my.lengths$chr),]
+	for (x in 2:length(files)) {
+		cur.lengths <- .getLengths(x)
+		cur.lengths <- cur.lengths[order(cur.lengths$chr),]
+		stopifnot(identical(my.lengths, cur.lengths))
+	}
 
 	# Merging for each combination, as necessary.
+	.initializeH5(file.tmp, my.lengths)
 	for (ac in names(overall)) {
 		current<-overall[[ac]]
-		h5createGroup(file.tmp, file.path('counts', ac))
+		.addGroup(file.tmp, ac)
 		for (tc in names(current)) {
 			is.okay <- current[[tc]]
 
@@ -26,24 +38,11 @@ mergePET <- function(files, file.out)
 				all.tab[[x]] <- current.tab
 			}
 			all.tab <- do.call(rbind, all.tab)
-			h5write(all.tab, file.tmp, file.path("counts", ac, tc))						
+			.writePairs(file.tmp, ac, tc, all.tab)
 		}
 	}
 	
-	# Checking the lengths
-	my.lengths <- NULL
-	for (x in files) {
-		cur.lengths <- h5read(x, "lengths")
-		cur.lengths <- cur.lengths[order(cur.lengths$chr),]
-		if (is.null(my.lengths)) { 
-			my.lengths <- cur.lengths
-		} else {
-			stopifnot(identical(my.lengths, cur.lengths))						
-		}
-	}
-	h5write(my.lengths, file.tmp, "lengths")
-
 	# Moving to the output.
-	file.rename(file.tmp, file.out)
+	if (!file.rename(file.tmp, file.out)) { stop("failed to copy temporary file to the specified destination") }
 	return(invisible(NULL))
 }
