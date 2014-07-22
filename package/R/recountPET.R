@@ -22,7 +22,7 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 
     # Running through each pair of chromosomes.
     overall <- .loadIndices(files)
-    all.coords <- list()
+    all.anchors <- all.targets <- list()
 	all.counts <- list()
 	ix <- 1L
 	totals <- integer(length(files))
@@ -62,15 +62,15 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 			combined <- .Call(cxx_aggregate_pair_counts, pulled, filter)
 			if (is.character(combined)) { stop(combined) }
 			all.counts[[ix]] <- combined[[3]]
-			all.coords[[ix]] <- data.frame(oridex[[anchor]][combined[[1]]], oridex[[target]][combined[[2]]])
+			all.anchors[[ix]] <- oridex[[anchor]][combined[[1]]]
+ 		    all.targets[[ix]] <- oridex[[target]][combined[[2]]]
 			ix <- ix + 1L
 		}
 	}
 
 	# Cleaning up and cashing out.
 	all.counts <- do.call(rbind, all.counts)
-	all.coords <- do.call(rbind, all.coords)
-	colnames(all.coords) <- c("anchor", "target")
+	all.coords <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
 	return(list(counts=all.counts, pairs=all.coords, totals=totals, region=regions))
 }
 

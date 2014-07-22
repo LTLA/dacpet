@@ -77,7 +77,9 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 
 	# Running through each pair of chromosomes.
     overall <- .loadIndices(files)
-	colpairs <- coldex <- list()
+	all.anchors <- all.targets <- coldex <- list()
+	counter <- 1L
+
 	for (anchor in names(overall)) {
 		stopifnot(anchor %in% chrs)
 		if (!is.null(restrict) && !(anchor %in% restrict)) { next }
@@ -134,17 +136,17 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 			# Collating the results.
             out<-.Call(cxx_count_chia, ptr, pulled, filter, anchor==target)
 			if (is.character(out)) { stop(out) }
-			colpairs[[length(colpairs)+1L]] <- data.frame(out[[1]]+offsets[[anchor]], out[[2]]+offsets[[target]])
-			coldex[[length(coldex)+1L]] <- out[[3]]+1L
+			all.anchors[[counter]] <- out[[1]]+offsets[[anchor]]
+ 			all.targets[[counter]] <- out[[2]]+offsets[[target]]
+			coldex[[counter]] <- out[[3]]+1L
+			counter <- counter + 1L
 		}
 	}
 
 	# Storing the output.
 	counts<-.Call(cxx_get_counts, ptr)
-	ptr<-NULL
 	if (is.character(counts)) { stop(counts) }
-	colpairs<-do.call(rbind, colpairs)
-	colnames(colpairs)<-c("anchor", "target")
+	colpairs <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
 	return(list(counts=counts[unlist(coldex),,drop=FALSE], totals=full.sizes, pairs=colpairs, region=windows))
 }
 
