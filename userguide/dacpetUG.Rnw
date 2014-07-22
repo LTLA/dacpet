@@ -43,7 +43,7 @@
 % Set to change date for document, not compile date.
 \date{First edition 15 August 2012\\
 \vspace{6pt}
-Last revised 15 May 2014}
+Last revised 22 June 2014}
 
 % Removing the bibliography title so it shows up in the contents.
 \makeatletter
@@ -99,7 +99,7 @@ Thoughtful suggestions for improvements are occassionally appreciated.
 As a quick demonstration of the analysis is largely impossible, this part will just be left empty. 
 Suffice to say that there are several components of the pipeline that shall be discussed:
 \begin{enumerate}
-\item converting BAM files to tag directories
+\item converting BAM files to tag files
 \item removing self-ligation events
 \item counting tag pairs for each interaction
 \item normalizing the linker combinations
@@ -109,7 +109,7 @@ Suffice to say that there are several components of the pipeline that shall be d
 In the various examples for this guide, data will be used from an experiment targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. 
 Obviously, readers will have to modify the code according to their own circumstances.
 
-\chapter{Preparing tag directories}
+\chapter{Preparing tag files}
 
 \section{Splitting tags and aligning reads}
 Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has a linker and tag component. 
@@ -143,21 +143,27 @@ Note that the three files named \code{SRR372741\_*} correspond to a single libra
 The two libraries represent different biological replicates according to the entry on NCBI GEO (accession number GSE33664).
 They will be used later to assess the reproducibility of the identified interactions.
 
-\section{Converting BAM files to tag directories}
+\section{Converting BAM files to tag files}
 Repeated parsing of the BAM file is quite laborious for routine analyses.
-Instead, the BAM file is parsed once to generate a processed tag directory.
-Each directory contains a number of files, each of which contains all tag pairs mapped between a particular pair of chromosomes. 
-Information can then be extracted efficiently from the tag directory for downstream processing. 
-This parsing is performed using the \code{preparePET} function to generate a directory for each BAM file in the dataset. 
+Instead, the BAM file is parsed once to generate a processed tag file in HDF5 format.
+Each tag file contains a number of \code{data.frame} objects, each of which contains all tag pairs mapped between a particular pair of chromosomes. 
+Information can then be extracted efficiently from the tag file for downstream processing. 
+This parsing is performed using the \code{preparePET} function to generate a tag file for each BAM file in the dataset. 
 
-<<>>=
+<<eval=FALSE>>=
 incoming <- bamfiles[1]
-outcoming <- sub("\\.bam", "", incoming)
-out <- preparePET(incoming, dir=outcoming, minq=20, dedup=TRUE)
+outcoming <- sub("\\.bam", ".h5", incoming)
+out <- preparePET(incoming, outcoming, minq=20, dedup=TRUE)
+@
+
+<<echo=FALSE>>=
+incoming <- bamfiles[1]
+outcoming <- "SRR372741_AA_new.h5"
+out <- preparePET(incoming, outcoming, minq=20, dedup=TRUE)
 @
 
 The value of \code{minq} describes the minimum mapping quality score (MAPQ) for aligned tags. 
-Both tags in each pair must have a MAPQ above \code{minq} for that pair to be reported in the directory. 
+Both tags in each pair must have a MAPQ above \code{minq} for that pair to be retained in the tag file.
 A reasonably stringent value is recommended given that alignment of short tags is likely to be error-prone.
 Similarly, the \code{dedup} value specifies whether or not marked duplicates should be removed. 
 This is recommended as the chance of obtaining exactly overlapping pairs is low. 
@@ -169,7 +175,7 @@ out$pairs
 @
 
 In most cases, the duplicate tags are also those with low mapping qualities as the aligner tends to place unknown sequences within alignable regions. 
-The total number of tag pairs is also shown, along with the number of pairs that are retained in the final directory. 
+The total number of tag pairs is also shown, along with the number of pairs that are retained in the final tag file.
 You can also have a look at the number of single tags or those with more than two aligned segments. 
 These should be non-existent, otherwise it suggests that the BAM file is malformed.
 
@@ -184,7 +190,7 @@ Real analyses should run this function over a loop for all files as required.
 
 \subsection{Making strand orientation plots}
 \label{ssec:strorient}
-Some diagnostics can be pulled out of each processed directory using the \code{diagnosePET} function. 
+Some diagnostics can be pulled out of each processed tag file using the \code{diagnosePET} function. 
 This extracts the strand information for inter-chromosomal tag pairs, i.e., those mapped to different chromosomes.  
 Each code refers to the combination of strands to which each pair is mapped, i.e., both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2}) and both reverse (\code{3}). 
 As you can see, these numbers are fairly balanced as ligation between different pieces of DNA can generate any combination of strands.
@@ -241,15 +247,15 @@ Any tag pairs corresponding to self-ligation events should be removed with the \
 This is done by removing all pairs contributing to the spike in the plot above, i.e., outward-facing pairs at gap distances below 25 kbp.
  
 <<>>=
-stripfile <- paste0(outcoming, "_strip.tsv")
+stripfile <- sub("\\.h5", "_strip.tsv", outcoming)
 stripped <- stripOutwardPET(outcoming, min.gap=25000, discard.to=stripfile)
 stripped
 @
 
-This will overwrite the old directory with the stripped results. 
-The return value represents the number of tag pairs discarded in this manner. 
-This is usually a substantial proportion of all pairs in the directory. 
-Alternatively, the stripped results can be diverted to a new directory if further quality control on the original results is desired. 
+This will overwrite the old tag file with the stripped results. 
+Alternatively, the stripped results can be diverted to a new tag file if further quality control on the original results is desired. 
+The return value of the function represents the number of tag pairs discarded in this manner. 
+This is usually a substantial proportion of all pairs in the original tag file. 
 Here, the discarded pairs are also routed into \code{stripfile} for later use.
 
 \chapter{Counting tag pairs into interactions}
@@ -262,17 +268,17 @@ Recall that each tag pair is associated with a linker combination.
 Specific interactions are those where the homo-linker count (i.e., AA or BB) is significantly greater than the hetero-linker count (i.e., AB).
 This is because the latter can only be formed from non-specific ligation between complexes. 
 
-The various demonstrations here will use processed tag directories for the full MCF7 dataset. 
-A little bit of work is necessary to determine which directories contain the hetero-linker counts.
-Similarly, some effort is required to determine which directories are generated from the same library. 
+The various demonstrations here will use processed tag files for the full MCF7 dataset. 
+A little bit of work is necessary to determine which files contain the hetero-linker counts.
+Similarly, some effort is required to determine which files are generated from the same library. 
 These vectors of identifiers will be used later to collapse counts for each linker combination into homo-/hetero-linker counts for each library.
 
 <<>>=
-curdirs <- c("SRR372741_AA", "SRR372741_AB", "SRR372741_BB",
-             "SRR372742_AA", "SRR372742_AB", "SRR372742_BB")
-is.het <- grepl("AB", curdirs)
-libname <- sub("_[AB]+", "", basename(curdirs))
-data.frame(curdirs, is.het, libname)
+curfiles <- c("SRR372741_AA.h5", "SRR372741_AB.h5", "SRR372741_BB.h5",
+             "SRR372742_AA.h5", "SRR372742_AB.h5", "SRR372742_BB.h5")
+is.het <- grepl("AB", curfiles)
+libname <- sub("_[AB]+", "", basename(curfiles))
+data.frame(curfiles, is.het, libname)
 @
 
 \section{Using windows or bins}
@@ -286,7 +292,7 @@ This is performed for each linker combination in each library such that a set of
 
 <<>>=
 countwidth <- 5000
-actual <-countPET(curdirs, width=countwidth, filter=10)
+actual <-countPET(curfiles, width=countwidth, filter=10)
 head(actual$counts)
 @
 
@@ -327,7 +333,7 @@ This will not have a major effect on the results due to the aforementioned spars
 Given that the average fragment length is around 1 kbp, a width of 5 kbp is used here to ensure that sufficiently large count sizes are obtained.
 
 \subsection{Filtering for computational efficiency} 
-Only bin pairs with a sum of counts across all directories above \code{filter} will be retained. 
+Only bin pairs with a sum of counts across all libraries above \code{filter} will be retained. 
 A reasonably large filter is necessary to avoid reporting an excessive number of uninteresting bin pairs that contain very few (e.g., single-digit) tag pairs. 
 Otherwise, the downstream analyses will be very computationally intensive for little practical gain.  
 Conversely, the filter value should not be too high lest genuine interactions be discarded. 
@@ -337,12 +343,12 @@ The appropriate choice of filter statistic and value is discussed in more depth 
 
 \subsection{Peak calling from outward-facing pairs}
 An alternative approach is to identify binding sites using peak calling programs like MACS \citep{zhang2008macs}. 
-These can be run on the outward-facing tag pairs that were previously pruned out of the directory.
+These can be run on the outward-facing tag pairs that were previously pruned out of the tag file.
 This is equivalent to identifying clusters in the ChIA-PET software tool \citep{li2010tool}. 
 Outward-facing pairs are more reliable as the presence of both tags at a site indicates that they are more likely to be properly mapped.
 
 \subsection{Pooling to a BED file}
-Here, the outward-facing pairs from all directories are pooled together and stored in a BED file. 
+Here, the outward-facing pairs from all tag files are pooled together and stored in a BED file. 
 Pooling is recommended as it ensures that a single set of peaks can be obtained from the entire dataset. 
 This means that consolidation of multiple peak sets is not required. 
 It also increases the number of tags involved for sensitive peak calling.
@@ -408,7 +414,7 @@ Counting can be performed using the \code{recountPET} function with filtering on
 Reverse read extension can also be done but this is probably unnecessary. 
 
 <<>>=
-peaked <- recountPET(curdirs, peaks, filter=20L)
+peaked <- recountPET(curfiles, peaks, filter=20L)
 head(peaked$counts)
 @
 
@@ -424,7 +430,7 @@ head(freqs$counts)
 @
 
 The total number of tag pairs in each library is also computed. 
-Note that this refers to each library rather than each directory, such that each total includes tag pairs from all linker combinations. 
+Note that this refers to each library rather than each tag file, such that each total includes tag pairs from all linker combinations. 
 Thus, all homo-/hetero-linker counts from the same library are assigned the same total. 
 This is appropriate as sequencing depth is the same for all counts sourced from the same library.
 Differences in homo-/hetero-linker counts within a library should not be attributed to differences in sequencing depth.
@@ -499,7 +505,7 @@ A more educated choice of filter threshold can be obtained by identifying putati
 <<>>=
 X <- 50000
 binsize <- 1e6
-binned <-countPET(curdirs, width=binsize, filter=1)
+binned <-countPET(curfiles, width=binsize, filter=1)
 rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
 threshold <- median(aveLogCPM(rebin$counts, lib.size=rebin$totals))
 size.adjust <- 2*log2(binsize/countwidth)
@@ -559,7 +565,7 @@ This is fairly reasonable given that they belong to separate organelles.
 Thus, any counts observed here are attributable to non-specific (and presumably random) ligation.
 
 <<>>=
-mitocounts <- sapply(curdirs, FUN=function(x) { sum(extractMito(x)) })
+mitocounts <- sapply(curfiles, FUN=function(x) { sum(extractMito(x)) })
 mitocounts
 @
 
@@ -585,7 +591,7 @@ This is generally reasonable as contacts would not be expected between all pairs
 Again, large bins are necessary to count rare non-specific events.
 
 <<>>=
-binned <-countPET(curdirs, width=1e7, filter=1)
+binned <-countPET(curfiles, width=1e7, filter=1)
 rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
 head(rebin$counts)
 @
@@ -825,18 +831,18 @@ The colour of the box is proportional to the number of tag pairs mapped between 
 <<label=chia1aa,eval=FALSE,echo=FALSE>>=
 expanded.a <- resize(ax[o[1]], fix="center", width=50000)
 expanded.t <- resize(tx[o[1]], fix="center", width=50000)
-plotChIA(curdirs[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10)
+plotChIA(curfiles[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10)
 rect(start(ax[o[1]]), start(tx[o[1]]), end(ax[o[1]]), end(tx[o[1]]))
 abline(0, 1, lty=2)
 @
 
 <<label=chia1ab,eval=FALSE,echo=FALSE>>=
-plotChIA(curdirs[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5)
+plotChIA(curfiles[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5)
 abline(0, 1, lty=2)
 @
 
 <<label=chia1bb,eval=FALSE,echo=FALSE>>=
-plotChIA(curdirs[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10)
+plotChIA(curfiles[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10)
 abline(0, 1, lty=2)
 @
 
@@ -876,15 +882,15 @@ Here's another example in a different colour:
 <<label=chia2aa,eval=FALSE,echo=FALSE>>=
 expanded.a <- resize(ax[o[3]], fix="center", width=50000)
 expanded.t <- resize(tx[o[3]], fix="center", width=50000)
-plotChIA(curdirs[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10, col="blue")
+plotChIA(curfiles[1], anchor=expanded.a, target=expanded.t, main="AA", cap=10, col="blue")
 @
 
 <<label=chia2ab,eval=FALSE,echo=FALSE>>=
-plotChIA(curdirs[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5, col="darkgreen")
+plotChIA(curfiles[2], anchor=expanded.a, target=expanded.t, main="AB", cap=5, col="darkgreen")
 @
 
 <<label=chia2bb,eval=FALSE,echo=FALSE>>=
-plotChIA(curdirs[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10, col="black")
+plotChIA(curfiles[3], anchor=expanded.a, target=expanded.t, main="BB", cap=10, col="black")
 @
 
 <<eval=FALSE>>=
