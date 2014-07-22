@@ -9,8 +9,8 @@ mergePET(files, file.out)
 }
 
 \arguments{
-\item{files}{a character vector containing paths to tag directories to be merged}
-\item{file.out}{a character string specifying the path to store the merged directory}
+\item{files}{a character vector containing paths to tag files to be merged}
+\item{file.out}{a character string specifying the path to store the merged file}
 }
 
 \details{
