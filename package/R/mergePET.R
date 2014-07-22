@@ -17,7 +17,7 @@ mergePET <- function(files, file.out)
 	# Checking the lengths
 	my.lengths <- .getLengths(files[1])
 	my.lengths <- my.lengths[order(my.lengths$chr),]
-	for (x in 2:length(files)) {
+	for (x in files[-1]) {
 		cur.lengths <- .getLengths(x)
 		cur.lengths <- cur.lengths[order(cur.lengths$chr),]
 		stopifnot(identical(my.lengths, cur.lengths))

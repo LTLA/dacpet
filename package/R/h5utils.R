@@ -32,7 +32,7 @@ lengthstr <- 'lengths'
 
 .getLengths <- function(y) { h5read(y, lengthstr) }
 
-.initializeeH5 <- function(y, len) {
+.initializeH5 <- function(y, len) {
 	if (file.exists(y)) { unlink(y, recursive=TRUE) } 
 	if (!h5createFile(y)) { stop(sprintf("failed to create '%s'", y)) }
 	if (!h5createGroup(y, countstr)) { stop(sprintf("failed to add 'counts' group to '%s'", y)) }
