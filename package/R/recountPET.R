@@ -71,7 +71,7 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 	# Cleaning up and cashing out.
 	all.counts <- do.call(rbind, all.counts)
 	all.coords <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
-	return(list(counts=all.counts, pairs=all.coords, totals=totals, region=regions))
+	return(list(counts=all.counts, pairs=all.coords, totals=totals, region=regions, files=files))
 }
 
 # It's worth pointing out that the anchor/target definition is based on the 

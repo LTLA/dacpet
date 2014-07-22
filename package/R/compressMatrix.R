@@ -1,4 +1,4 @@
-compressMatrix <- function(data, hetero, libname) 
+compressMatrix <- function(data, hetero=NULL, libname=NULL) 
 # This converts the raw output from countPET into something that's 
 # actually usable in edgeR. Briefly, it gets rid of weighting by 
 # expanding out all relevant elements. It also gets rid of the majority
@@ -10,9 +10,11 @@ compressMatrix <- function(data, hetero, libname)
 # written by Aaron Lun
 # 21 January, 2014
 {
+    if (is.null(hetero)) { hetero <- grepl("AB", data$files) }
+	if (is.null(libname)) { libname <- sub("_(AA|AB|BB|other).*", "", data$files) }
+
 	ndir <- length(hetero)
 	if (ndir!=length(libname) || ndir!=ncol(data$counts)) { stop("inconsistent number of directories in libname, hetero and data") }
-	output <- list()
 	o <- order(libname, hetero)
     hetero <- hetero[o]
 	libname <- libname[o]
@@ -24,11 +26,12 @@ compressMatrix <- function(data, hetero, libname)
 	if (ndir>=2L) {
 		index <- 1L
 	    for (x in 2:ndir) {
+			cur.counts <- data$counts[,o[x]]
 		    if (hetero[x]==hetero[x-1L] && libname[x]==libname[x-1L]) {
-			    new.counts[[index]] <- new.counts[[index]] + data$counts[,o[x]]
+			    new.counts[[index]] <- new.counts[[index]] + cur.counts
 			} else {
 				index <- index + 1L
-				new.counts[[index]] <- data$counts[,o[x]]
+				new.counts[[index]] <- cur.counts
 				lib.out[[index]] <- libname[x]
 				status[[index]] <- hetero[x]
 			}
@@ -44,6 +47,8 @@ compressMatrix <- function(data, hetero, libname)
  	new.counts <- do.call(cbind, new.counts)
 	colnames(new.counts) <- paste0(lib.out, ifelse(status, "het", "hom"))
 	rownames(new.counts) <- rownames(data$counts)
+	
+	output <- list()
 	output$hetero <- unlist(status)
 	output$libname <- unlist(lib.out)
 	output$totals <- new.totals

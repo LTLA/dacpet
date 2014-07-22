@@ -147,7 +147,7 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 	counts<-.Call(cxx_get_counts, ptr)
 	if (is.character(counts)) { stop(counts) }
 	colpairs <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
-	return(list(counts=counts[unlist(coldex),,drop=FALSE], totals=full.sizes, pairs=colpairs, region=windows))
+	return(list(counts=counts[unlist(coldex),,drop=FALSE], totals=full.sizes, pairs=colpairs, region=windows, files=files))
 }
 
 .forgeInterval <- function(pt, ext, spacing, left=0, right=0, maxed=NULL, is.first=TRUE) 
