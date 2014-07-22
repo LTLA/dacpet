@@ -11,5 +11,6 @@ userguide/dacpetUG.toc
 userguide/here_peaks.bed
 userguide/linker.sh
 userguide/plots-ug/
-userguide/pooled.bed
+userguide/dinter.tsv
 userguide/results.tsv
+userguide/pooled.bed

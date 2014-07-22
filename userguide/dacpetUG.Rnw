@@ -665,6 +665,7 @@ y <- DGEList(freqs$counts, lib.size=freqs$totals, norm.factors=normfacs)
 @
 
 \section{The paired-sample design}
+\label{sec:paireddesign}
 The most obvious choice is a paired-sample design, where the homo- and hetero-linker counts from a single library are paired together.
 The aim is to identify differences between the homo- and hetero-linker counts within each pair. 
 This design accommodates library-specific effects, i.e., differences in the absolute abundance between libraries will not affect the result as long as the homo-/hetero-linker count ratio is constant between libraries.
@@ -812,13 +813,13 @@ In practice, all interactions should be sorted by the $p$-value and saved to fil
 This means that results can be queried in a flexible manner without needing to re-run the entire analysis, e.g., if the FDR threshold is changed.
 
 <<>>=
-ax <- freqs$region[freqs$pairs$anchor]
-tx <- freqs$region[freqs$pairs$target]
-out <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
+ax <- getAnchor(freqs)
+tx <- getTarget(freqs)
+final <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
     target.chr=seqnames(tx), target.start=start(tx), target.end=end(tx), 
     result.group$table, FDR=adj.p)
-o <- order(out$PValue)
-write.table(out[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALSE)
+o <- order(final$PValue)
+write.table(final[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALSE)
 @
 
 \section{Visualization with plaid plots}
@@ -916,6 +917,170 @@ Tying this in with gene annotation, ChIP-seq peaks and/or RNA-seq data can then 
 Of course, users should always keep the identify of the target protein in mind. 
 This particular experiment targets RNA polymerase II so most activity will occur at genes and have a transcriptional focus. 
 Other protein targets are likely to have different profiles.
+
+\chapter{Repeating with differential analyses}
+
+\section{Loading for homo-linker counts}
+The previous analysis detects significantly specific interactions by comparing the homo-linker counts with the hetero-linker counts within a single condition.
+True differential analyses involve comparison of counts between libraries for different conditions.
+This can be more useful as differential interactions are more likely to be relevant to the biological difference of interest.
+To demonstrate, data will be loadded from a ChIA-PET experiment targeting RNA polymerase II and generated from MCF7 and K562 cells \citep{li2012extensive}. 
+A bin counting strategy is used here to extract the homo-linker counts in each library.
+
+<<>>=
+curfiles <- c("SRR372741_AA.h5", "SRR372741_BB.h5",
+              "SRR372742_AA.h5", "SRR372742_BB.h5",
+              "SRR372747_AA.h5", "SRR372747_BB.h5",
+              "SRR372748_AA.h5", "SRR372748_BB.h5")
+actual <-countPET(curfiles, width=countwidth, filter=10)
+comp.freq <- compressMatrix(actual)
+head(comp.freq$counts)
+@
+
+The aim is to identify interactions where the homo-linker counts for MCF7 and K562 cells are significantly different.
+This is an effective strategy as homo-linker counts are large enough for stable inference in most ChIA-PET datasets.
+In theory, hetero-linker counts could also be used to account for library-specific differences in ligation specificity.
+However, these counts will not be included here as they are too small to be informative.
+This is analogous to the discussion about paired-sample and one-way designs in Section~\ref{sec:paireddesign}.
+
+\section{Filtering on abundance and distance}
+Filtering is performed to remove low-abundance features for which detection power will always be low.
+Local interactions are also removed as they provide no information with respect to chromatin organization.
+This is equivalent to the strategies described in Section~\ref{sec:filtering}.
+
+<<>>=
+min.gap <- getDistance(comp.freq)
+keep <- aveLogCPM(comp.freq$counts, lib.size=comp.freq$totals) > 0 &
+	(min.gap > 1 | is.na(min.gap))
+comp.freq$counts <- comp.freq$counts[keep,]
+comp.freq$pairs <- comp.freq$pairs[keep,]
+summary(keep)
+@
+
+\section{Normalizing differences between libraries}
+Some normalization is required to correct for systematic biases prior to hypothesis testing.
+One approach is to assume that most interactions are constant between MCF7 and K562 cells.
+This means that the TMM method can be applied directly to the counts for the interactions.
+Filtering beforehand is critical to ensure that the counts are large enough for sensible normalization on the M-values (i.e., transformed fold changes).
+Of course, this is not applicable if one expects overall changes to the interaction structure between cell types.
+
+<<>>=
+y.diff <- DGEList(comp.freq$counts, lib.size=comp.freq$totals)
+y.diff <- calcNormFactors(y.diff)
+y.diff$samples
+@
+
+Alternatively, an approach analogous to homo-/hetero-linker normalization (see Section~\ref{sec:norm}) can be used.
+Genuine biological differences are not expected between groups for non-specific interactions.
+Any differences in the counts for these interactions are attributed to composition biases and other technical effects.
+To remove such biases, the majority of inter-chromosomal contacts are assumed to be non-specific.
+Reads are re-counted using large bins to provide sufficiently large counts for these weak contacts.
+The TMM method can then be applied to compute appropriate normalization factors.
+
+<<>>=
+binned.diff <-countPET(curfiles, width=1e7, filter=1)
+rebin.diff <- compressMatrix(binned.diff)
+inter.counts <- rebin.diff$counts[is.na(getDistance(rebin.diff)),]
+normfacs <- calcNormFactors(DGEList(inter.counts, lib.size=rebin.diff$totals))$samples$norm.factors
+normfacs
+@
+
+The ideal approach depends on whether any consistent increases or decreases in interaction intensity are assumed to be genuine.
+If so, the second approach should be used as it only removes differences for non-specific interactions.
+This maintains any differences in the high-abundance specific interactions.
+Otherwise, systematic differences in the specific interactions are technical artifacts.
+The first approach should then be used as it will remove such spurious differences.
+
+For this particular dataset, the second approach is chosen.
+Large-scale changes are to be expected when comparing two different immortalized cell lines.
+Note that the normalization factors computed with large bins can still be applied to the counts for the smaller bins.
+This is because the same composition biases will be present throughout the dataset.
+
+<<>>=
+y.diff$samples$norm.factors <- normfacs
+@
+
+\section{Running through the statistical analysis}
+As previously mentioned, users should perform the statistical analysis with a one-way layout.
+Counts for each cell type are treated as replicates of a group.
+The ensuing analysis will compare counts between the two cell types for each interaction.
+The null hypothesis is that the second coefficient is zero, i.e., the normalized mean counts for each group are identical.
+
+<<>>=
+design.diff <- model.matrix(~factor(c("mcf7", "mcf7", "k562", "k562")))
+design.diff
+@
+
+Dispersion estimation and hypothesis testing can be performed as previously described, using the QL framework from the \edgeR{} package.
+For the simple one-way layout described above, the contrast does not need to be specified as the last coefficient will be tested in \code{glmQLFTest}.
+Analyses with multiple groups should always provide an argument to \code{coef} or \code{contrasts} to avoid confusion.
+
+<<label=bcvdiff,eval=FALSE,echo=FALSE>>=
+y.diff <- estimateDisp(y.diff, design.diff)
+plotBCV(y.diff)
+@
+
+<<label=qldiff,eval=FALSE,echo=FALSE>>=
+result.diff <- glmQLFTest(y.diff, design.diff, robust=TRUE, plot=TRUE)
+@
+
+<<eval=FALSE>>=
+<<bcvdiff>>
+<<qldiff>>
+@
+
+\setkeys{Gin}{width=0.49\textwidth}
+\begin{center}
+<<fig=TRUE,echo=FALSE>>=
+<<bcvdiff>>
+@
+<<fig=TRUE,echo=FALSE>>=
+<<qldiff>>
+@
+\end{center}
+\setkeys{Gin}{width=0.8\textwidth}
+
+For completeness, if hetero-linker counts are sufficiently high, it may be possible to set up a paired-sample design.
+In such a design, each library forms a homo-/hetero-linker pair, much like that described in Section~\ref{sec:paireddesign}.
+Each group would have a different homo-/hetero-linker fold change.
+The null hypothesis would then state that the fold change for each group is equal.
+
+<<>>=
+count.origins <- factor(c("A_hom", "A_het", "B_hom", "B_het"))
+design.diff2 <- model.matrix(~0+count.origins)
+colnames(design.diff2) <- levels(count.origins)
+my.contrast <- c(-1, 1, 1, -1)
+design.diff2
+@
+
+Here, \code{my.contrast} defines the null as \code{B\_hom - B\_het - (A\_hom - A\_het)=0}.
+This should avoid detection of any spurious changes in the homo-linker counts that are driven by non-specific ligation.
+For example, an increase in \code{B\_hom} over \code{A\_hom} will not be detected if there is a corresponding increase in \code{B\_het} over \code{A\_het}.
+Of course, this is mostly academic given that hetero-linker counts are usually too low for practical use.
+
+\section{Examination of the results}
+A summary of the results can be obtained with a little work.
+The non-zero codes indicate the number of interactions that are significantly different at a FDR threshold of 5\%.
+The negative code indicates that the interaction is stronger in the K562 cells, whereas a positive code indicates that it is strong in the MCF7 cells.
+Of course, one must be cautious when interpreting results from immortalized lines.
+Any changes in interaction intensities may be driven by genomic rearrangements.
+
+<<>>=
+summary(decideTestsDGE(result.diff))
+@
+
+It is a trivial matter to save these results for further perusal.
+The process of annotation and visualization will be skipped here for brevity, as it is the same as previously described.
+
+<<>>=
+ax <- getAnchor(comp.freq)
+tx <- getTarget(comp.freq)
+final <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
+    target.chr=seqnames(tx), target.start=start(tx), target.end=end(tx), 
+    result.diff$table, FDR=p.adjust(result.diff$table$PValue, method="BH"))
+o <- order(final$PValue)
+write.table(final[o,], file="dinter.tsv", sep="\t", quote=FALSE, row.names=FALSE)
+@
 
 \chapter{Epilogue}
 
