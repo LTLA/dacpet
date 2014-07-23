@@ -16,12 +16,17 @@ recountPET(files, regions, ext=1L, filter=20L)
 }
 	
 \details{
-This function will extend each tag by \code{ext} in the direction of the tag.
-For any given pair of regions, it will count the number of extended tags
-that overlap each region. This is performed for each processed tag
-file. Region pairs that have a sum of counts less than \code{filter}
-across all files will be discarded. Again, \code{ext} is provided here as
-a formality but isn't particularly useful for actual analyses, see \code{\link{countPET}}.
+This function will extend each tag by \code{ext} in the direction of the tag. 
+For any given pair of regions, it will count the number of extended tags that overlap each region. 
+This is performed for each processed tag file. 
+Region pairs that have a sum of counts less than \code{filter} across all files will be discarded. 
+Again, \code{ext} is provided here as a formality but isn't particularly useful for actual analyses, see \code{\link{countPET}}.
+
+Some caution is required when intepreting the output \code{pairs}. 
+The pairs of indices point to the interacting regions in \code{regions}.
+The anchor index points to the region with a chromosomal name with a larger rank (i.e., later in alphanumerical ordering).
+If the chromosomes are the same, the anchor index points to the region with the larger start position.
+Unlike \code{\link{countPET}}, the actual value of the anchor index may be smaller than that of the target index, if \code{regions} is unsorted.
 }
 
 \value{
