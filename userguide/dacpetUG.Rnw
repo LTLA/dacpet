@@ -920,7 +920,7 @@ Other protein targets are likely to have different profiles.
 
 \chapter{Repeating with differential analyses}
 
-\section{Loading for homo-linker counts}
+\section{Loading the homo-linker counts}
 The previous analysis detects significantly specific interactions by comparing the homo-linker counts with the hetero-linker counts within a single condition.
 True differential analyses involve comparison of counts between libraries for different conditions.
 This can be more useful as differential interactions are more likely to be relevant to the biological difference of interest.
@@ -944,7 +944,7 @@ However, these counts will not be included here as they are too small to be info
 This is analogous to the discussion about paired-sample and one-way designs in Section~\ref{sec:paireddesign}.
 
 \section{Filtering on abundance and distance}
-Filtering is performed to remove low-abundance features for which detection power will always be low.
+Filtering is performed to remove low-abundance interactions for which detection power will always be low.
 Local interactions are also removed as they provide no information with respect to chromatin organization.
 This is equivalent to the strategies described in Section~\ref{sec:filtering}.
 
@@ -987,9 +987,8 @@ normfacs
 
 The ideal approach depends on whether any consistent increases or decreases in interaction intensity are assumed to be genuine.
 If so, the second approach should be used as it only removes differences for non-specific interactions.
-This maintains any differences in the high-abundance specific interactions.
-Otherwise, systematic differences in the specific interactions are technical artifacts.
-The first approach should then be used as it will remove such spurious differences.
+This preserves any differences in the high-abundance specific interactions.
+Otherwise, these differences are technical artifacts and should be removed with the first approach.
 
 For this particular dataset, the second approach is chosen.
 Large-scale changes are to be expected when comparing two different immortalized cell lines.
@@ -1042,20 +1041,19 @@ result.diff <- glmQLFTest(y.diff, design.diff, robust=TRUE, plot=TRUE)
 
 For completeness, if hetero-linker counts are sufficiently high, it may be possible to set up a paired-sample design.
 In such a design, each library forms a homo-/hetero-linker pair, much like that described in Section~\ref{sec:paireddesign}.
-Each group would have a different homo-/hetero-linker fold change.
-The null hypothesis would then state that the fold change for each group is equal.
+All replicates in each group would have the same homo-/hetero-linker fold change.
+The null hypothesis would then state that the fold change is equal between groups.
 
 <<>>=
-count.origins <- factor(c("A_hom", "A_het", "B_hom", "B_het"))
-design.diff2 <- model.matrix(~0+count.origins)
-colnames(design.diff2) <- levels(count.origins)
-my.contrast <- c(-1, 1, 1, -1)
+libname <- factor(c(1, 1, 2, 2, 3, 3, 4, 4))
+combo <- factor(c("Ahom", "het", "Ahom", "het", "Bhom", "het", "Bhom", "het"))
+design.diff2 <- model.matrix(~libname + combo)
 design.diff2
 @
 
-Here, \code{my.contrast} defines the null as \code{B\_hom - B\_het - (A\_hom - A\_het)=0}.
+The corresponding contrast would define the null as \code{groupBhom = 0} to equalize the homo-/hetero-linker fold change between groups.
 This should avoid detection of any spurious changes in the homo-linker counts that are driven by non-specific ligation.
-For example, an increase in \code{B\_hom} over \code{A\_hom} will not be detected if there is a corresponding increase in \code{B\_het} over \code{A\_het}.
+For example, an increase in all \code{Bhom} over \code{Ahom} will not be detected if there is an increase in the corresponding hetero-linker counts.
 Of course, this is mostly academic given that hetero-linker counts are usually too low for practical use.
 
 \section{Examination of the results}
