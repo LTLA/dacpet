@@ -18,10 +18,10 @@ lengthstr <- 'lengths'
 		for (ac in names(current)) {
 			if (is.null(overall[[ac]])) { overall[[ac]]<-list() }
 			subcurrent <- current[[ac]]
-			subcurrent <- split(subcurrent$dim, subcurrent$name)
-			for (tc in names(subcurrent)) {
+			for (yx in 1:nrow(subcurrent)) { 
+				tc <- subcurrent$name[yx]
 				if (is.null(overall[[ac]][[tc]])) { overall[[ac]][[tc]] <- integer(ni) }
-				overall[[ac]][[tc]][ix] <- as.integer(subcurrent[[tc]]) # Dims will be convertible as it stores the number of rows in a data.frame.
+				overall[[ac]][[tc]][ix] <- as.integer(subcurrent$dim[yx]) # Dims will be convertible as it stores the number of rows in a data.frame.
 			}
 		}
 	}
