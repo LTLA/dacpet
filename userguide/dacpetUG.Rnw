@@ -80,20 +80,17 @@ dir.create("plots-ug")
 
 \chapter{Introduction}
 \section{Scope}
-This document describes the analysis of CHIA-PET data with the \pkgname{}
-package. In particular, specific interactions are distinguished from
-non-specific ligation events by comparing the homo-linker and hetero-linker
-counts for each interaction. This is done in a statistically rigorous manner
-using the methods in the \edgeR{} package \citep{edgeR}. Knowledge of \edgeR{} is useful but
-is not necessary for reading.
+This document describes the use of the \pkgname{} package to analyze CHIA-PET data.
+In particular, specific interactions are distinguished from non-specific ligation events by comparing the homo-linker and hetero-linker counts for each interaction. 
+Analyses can also be performed to identify interactions with significant changes in intensity between biological conditions.
+This is done in a statistically rigorous manner using the methods in the \edgeR{} package \citep{edgeR}. 
+Knowledge of \edgeR{} is useful but is not necessary for reading.
 
 \section{How to get help}
-Most questions about individual functions should be answered by the
-documentation.  For example, if you want to know more about \code{preparePET},
-you can bring up the documentation by typing \code{?preparePET} or
-\code{help(preparePET)} at the \R{} prompt. If that doesn't help, reading this
-guide or contacting one of the authors is probably the best approach.
-Thoughtful suggestions for improvements are occassionally appreciated.
+Most questions about individual functions should be answered by the documentation.  
+For example, if you want to know more about \code{preparePET}, you can bring up the documentation by typing \code{?preparePET} or \code{help(preparePET)} at the \R{} prompt. 
+If that doesn't help, reading this guide or contacting one of the authors is probably the best approach.
+Thoughtful suggestions for improvements are occasionally appreciated.
 
 \section{Quick start}
 As a quick demonstration of the analysis is largely impossible, this part will just be left empty. 
