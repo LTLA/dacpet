@@ -645,10 +645,10 @@ In the MA plot above, all inter-chromosomal interactions lie within the main bul
 \chapter{Assessing biological variability}
 
 \section{Motivation}
-Datasets with biological replicates account for biological variability when performing hypothesis testing. 
+The availability of biological replicates means that the analysis can account for biological variability when performing hypothesis testing. 
 This reduces the significance of detected features when the data is highly variable. 
 For count-based data, this can be achieved using the NB model in edgeR \citep{edgeR}.  
-Estimation of the NB dispersion parameter allows modelling of te variation between biological replicates. 
+Estimation of the NB dispersion parameter allows modelling of the variation between biological replicates. 
 Similarly, estimation of the quasi-likelihood (QL) dispersion can be performed to account for heteroskedasticity \citep{lund2012ql}. 
 
 Dispersion estimation requires fitting of a generalized linear model (GLM) to the counts for each interaction \citep{mccarthy2012glm}. 
