@@ -19,13 +19,14 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 	gr <- split(ranges(sregions), seqnames(sregions))
 	oridex <- split(o, seqnames(sregions))
 	chrs <- names(gr)
+	.getChrs(files) # To check lengths.
 
     # Running through each pair of chromosomes.
     overall <- .loadIndices(files)
     all.anchors <- all.targets <- list()
 	all.counts <- list()
 	ix <- 1L
-	totals <- integer(length(files))
+	totals <- integer(nlibs)
 
     for (anchor in names(overall)) {
         if (! (anchor %in% chrs) ) { next }

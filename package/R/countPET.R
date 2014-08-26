@@ -25,6 +25,8 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 	} else if (width <= 0L) { 
 		stop("width must be a positive integer")
 	}
+	chromosomes <- .getChrs(files)
+	chrs <- names(chromosomes)
 
 	# Checking out the incoming left/right, to decide whether we need a point at the start.
 	if (left >= spacing) { stop("shift must be less than the spacing") }
@@ -35,19 +37,6 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
     ptr <- .Call(cxx_create_counts, nlibs)
     if (is.character(ptr)) { stop(ptr) }
 	full.sizes <- rep(0L, nlibs)
-	
-	# Checking genome consistency.
-	chromosomes <- NULL
-	for (f in files) {
-		temp <- .getLengths(f)
-		temp2 <- as.vector(temp$length)
-		names(temp2) <- temp$chr
-		if (is.null(chromosomes)) { chromosomes <- temp2 }
-		else if (!identical(temp2, chromosomes)) { 
-			stop("chromosome identities and lengths should be the same across files")
-		}
-	}
-	chrs <- names(chromosomes)
 
 	# Constructing a GRanges object of the windows corresponding to each point.  We
 	# need to know the number of points based on left/right shifts. Also noting the
@@ -173,4 +162,20 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 		ender <- pmin(ender, maxed)
 	}
 	return(list(start=pt, end=ender))
+}
+
+.getChrs <- function(files) {
+	# Checking genome consistency.
+	chromosomes <- NULL
+	for (f in files) {
+		temp <- .getLengths(f)
+		temp2 <- as.vector(temp$length)
+		names(temp2) <- temp$chr
+		temp2 <- temp2[order(names(temp2))]
+		if (is.null(chromosomes)) { chromosomes <- temp2 }
+		else if (!identical(temp2, chromosomes)) { 
+			stop("chromosome identities and lengths should be the same across files")
+		}
+	}
+	return(chromosomes)
 }
