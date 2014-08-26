@@ -4,7 +4,7 @@ useDynLib(dacpet, .registration=TRUE, .fixes="cxx_")
 #  All functions exported other than those starting with "."
 export(splitLinkers, preparePET, mergePET,
 	stripOutwardPET, diagnosePET, extractMito,
-	countPET, recountPET, 
+	countPET, recountPET, marginPET,  
 	compressMatrix, getDistance, getAnchor, getTarget,
 	plotChIA)
 

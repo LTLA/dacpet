@@ -24,6 +24,8 @@ SEXP count_all_pairs (SEXP, SEXP, SEXP, SEXP, SEXP);
 
 SEXP aggregate_pair_counts (SEXP, SEXP);
 
+SEXP count_margins (SEXP, SEXP, SEXP, SEXP, SEXP);
+
 SEXP split_linkers(SEXP, SEXP, SEXP, SEXP, 
 				SEXP, SEXP, SEXP, SEXP);
 

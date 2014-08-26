@@ -10,6 +10,7 @@ static const R_CallMethodDef all_call_entries[] = {
 	{"count_chia", (DL_FUNC) &count_chia, 4},
 //	{"decompress_pairs", (DL_FUNC) &decompress_pairs, 9},
 	{"count_all_pairs", (DL_FUNC) &count_all_pairs, 5},
+	{"count_margins", (DL_FUNC) &count_margins, 5},
 	{"aggregate_pair_counts", (DL_FUNC) &aggregate_pair_counts, 2},
 	{"split_linkers", (DL_FUNC) &split_linkers, 8},
 	
