@@ -1,0 +1,408 @@
+
+R version 3.1.0 (2014-04-10) -- "Spring Dance"
+Copyright (C) 2014 The R Foundation for Statistical Computing
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ####################################################################################################
+> # This tests the marginal counting for supplied regions.
+> 
+> suppressPackageStartupMessages(require(dacpet))
+> suppressPackageStartupMessages(require(rhdf5))
+> 
+> chromos <- c(chrA=1000, chrB=10000, chrC=100000)
+> simgen <- function(file, num) {
++ 	if (file.exists(file)) { unlink(file) }
++ 	h5createFile(file)
++ 	h5createGroup(file, "counts")
++ 	h5write(data.frame(chr=names(chromos), length=chromos, stringsAsFactors=FALSE), file, 'lengths')
++     
++ 	for (i in 1:length(chromos)) { 
++         max.anchor<-chromos[[i]]
++ 		cur.anchor <- names(chromos)[i]
++ 		h5createGroup(file, file.path("counts", cur.anchor))
++ 
++         for (j in 1:i) {
++             max.target<-chromos[[j]];
++             anchors<-as.integer(floor(runif(num, 1, max.anchor)));
++             targets<-as.integer(floor(runif(num, 1, max.target)));
++             if (i==j){
++                 anchor.1<-pmax(anchors, targets);
++                 target.1<-pmin(anchors, targets);
++                 anchors<-anchor.1;
++                 targets<-target.1;
++             }
++             astr<-rbinom(num, 1, 0.5)==1L
++             tstr<-rbinom(num, 1, 0.5)==1L
++             anchors[astr]<--anchors[astr]
++             targets[tstr]<--targets[tstr]
++ 			
++ 			h5write(data.frame(anchor.pos=anchors, target.pos=targets), file,
++ 				file.path("counts", cur.anchor, names(chromos)[j]))
++         }
++     }
++     return(invisible())
++ }
+> 
+> reggen <- function(num, width) {
++ 	output <- GRanges()
++ 	for (x in names(chromos)) {
++ 		starts <- runif(num, 1, chromos[[x]])
++ 		widths <- runif(num, width[1], width[2])
++ 		suppressWarnings(output <- c(output, GRanges(x, IRanges(starts, starts+widths))))
++ 	}
++ 	return(output)
++ }
+> 
+> countcomp <- function(alldirs, regs, ext, restrict=NULL) {
++ 	observed <- marginPET(alldirs, regs, ext=ext, restrict=restrict)
++ 	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
++ 	dummycount <- observed$counts
++ 	dummytotes <- observed$totals
++ 
++ 	# Picking out the truth.
++ 	overall <- dacpet:::.loadIndices(alldirs)
++ 	for (x in names(overall)) {
++ 		cur1 <- overall[[x]]
++ 		for (y in names(cur1)) { 
++ 			cur2 <- cur1[[y]]
++ 			if (!is.null(restrict) && !(x %in% restrict && y %in% restrict)) { next }
++ 
++ 			collected <- list()
++ 			for (z in 1:length(alldirs)) {
++ 				if (cur2[z]) { 
++             		stuff <- dacpet:::.getPairs(alldirs[z], x, y)
++ 					attributes(stuff$anchor.pos) <- attributes(stuff$target.pos) <- NULL
++ 				} else {
++ 					stuff <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
++ 				}
++ 				astart <- ifelse(stuff$anchor.pos > 0, stuff$anchor.pos - ext + 1L, -stuff$anchor.pos)
++ 				aend <- astart + ext - 1L
++ 				alap <- findOverlaps(GRanges(x, IRanges(astart, aend)), regs)
++ 
++ 				tstart <- ifelse(stuff$target.pos > 0, stuff$target.pos - ext + 1L, -stuff$target.pos)
++ 				tend <- tstart + ext - 1L
++ 				tlap <- findOverlaps(GRanges(y, IRanges(tstart, tend)), regs)
++ 
++ 				# Collating them to identify combinations.
++ 				if (x==y) {
++ 					all.s <- c(subjectHits(alap), subjectHits(tlap))
++ 					all.q <- c(queryHits(alap), queryHits(tlap))
++ 					o <- order(all.s, all.q)
++ 					is.diff <- c(TRUE, diff(all.s[o])!=0L | diff(all.q[o])!=0L)
++ 					dummycount[,z] <- dummycount[,z] - tabulate(all.s[o][is.diff], nbins=length(regs))
++ 				} else {
++ 					dummycount[,z] <- dummycount[,z] - tabulate(c(subjectHits(alap), subjectHits(tlap)), nbins=length(regs)) 
++ 				}
++ 				dummytotes[z] <- dummytotes[z] - length(astart)
++ 			}
++ 		}
++ 	}
++ 
++ 	# Checking that there isn't any unID's odds and ends.
++ 	if (any(dummycount!=0L)) { 
++ 		stop("interaction in observed set not identified, or identified multiple times") 
++ 	}
++ 	if (any(dummytotes!=0L)) { 
++ 		stop("totals don't match up")
++ 	}
++ 	return(head(observed$counts))
++ }
+> 
+> ####################################################################################################
+> # Initializing the analysis.
+> 
+> set.seed(485632481)
+> 
+> dir.create("temp-marg")
+> dir1<-"temp-marg/out.1.h5"
+> dir2<-"temp-marg/out.2.h5"
+> dir3<-"temp-marg/out.3.h5"
+> 
+> simgen(dir1, 200)
+> simgen(dir2, 100)
+> 
+> myreg <- reggen(10, c(10, 50))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   47   16
+[2,]   43   27
+[3,]   31    9
+[4,]   17   13
+[5,]   38   16
+[6,]   16    5
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]   78   35
+[2,]  118   63
+[3,]   74   32
+[4,]   89   51
+[5,]  104   49
+[6,]   79   44
+> 
+> myreg <- reggen(10, c(40, 100))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   48   18
+[2,]   86   35
+[3,]   93   49
+[4,]   67   26
+[5,]   74   45
+[6,]   96   53
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]   84   37
+[2,]  156   79
+[3,]  151   83
+[4,]  126   63
+[5,]  141   86
+[6,]  156   86
+> 
+> myreg <- reggen(50, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   34   12
+[2,]   23    6
+[3,]   25   13
+[4,]   14    9
+[5,]   20    7
+[6,]   28   12
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  110   53
+[2,]   97   30
+[3,]   92   49
+[4,]   78   49
+[5,]   65   31
+[6,]  100   36
+> 
+> # Again, with more reads.
+> 
+> simgen(dir1, 500)
+> simgen(dir2, 1000)
+> 
+> myreg <- reggen(10, c(10, 50))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   81  187
+[2,]   88  175
+[3,]   72  142
+[4,]   83  165
+[5,]  102  176
+[6,]   54  101
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  251  540
+[2,]  266  498
+[3,]  211  469
+[4,]  222  416
+[5,]  276  512
+[6,]  222  442
+> 
+> myreg <- reggen(10, c(40, 100))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]  148  345
+[2,]  134  289
+[3,]  190  365
+[4,]  174  374
+[5,]  138  325
+[6,]  109  220
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  312  677
+[2,]  307  616
+[3,]  378  701
+[4,]  342  694
+[5,]  315  663
+[6,]  307  547
+> 
+> myreg <- reggen(50, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   71  102
+[2,]   61  121
+[3,]   45   81
+[4,]   57   97
+[5,]   54  110
+[6,]   44   93
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  252  445
+[2,]  227  470
+[3,]  147  267
+[4,]  240  428
+[5,]  214  452
+[6,]  204  426
+> 
+> # Again, with more directories.
+> 
+> simgen(dir1, 200)
+> simgen(dir2, 100)
+> simgen(dir3, 400)
+> 
+> myreg <- reggen(10, c(10, 50))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   24    7
+[2,]   44   18
+[3,]   20   12
+[4,]   45   19
+[5,]   26   33
+[6,]   15   10
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]   73   33
+[2,]  124   50
+[3,]   86   51
+[4,]  127   49
+[5,]   92   67
+[6,]   84   49
+> 
+> myreg <- reggen(10, c(40, 100))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   52   27
+[2,]   54   35
+[3,]   62   33
+[4,]   53   28
+[5,]   77   36
+[6,]   49   26
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  119   67
+[2,]   85   52
+[3,]  135   72
+[4,]  130   67
+[5,]  155   62
+[6,]  112   66
+> 
+> myreg <- reggen(50, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   25   15
+[2,]   12   20
+[3,]   19    9
+[4,]   29   10
+[5,]   18   10
+[6,]   20    6
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  106   48
+[2,]   84   53
+[3,]   89   28
+[4,]   62   28
+[5,]   97   46
+[6,]   92   47
+> 
+> # Lastly, with a lot more regions.
+> 
+> simgen(dir1, 200)
+> simgen(dir2, 100)
+> simgen(dir3, 400)
+> 
+> myreg <- reggen(20, c(10, 50))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   19    5
+[2,]   51   21
+[3,]   28   18
+[4,]   31   21
+[5,]   34   22
+[6,]   33   14
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]   86   51
+[2,]  125   53
+[3,]   89   46
+[4,]   98   45
+[5,]   98   49
+[6,]   99   46
+> 
+> myreg <- reggen(20, c(40, 100))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   59   26
+[2,]   56   30
+[3,]   71   36
+[4,]   43   17
+[5,]   47   31
+[6,]   56   25
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]  127   57
+[2,]  130   58
+[3,]  129   68
+[4,]  112   55
+[5,]  114   57
+[6,]  135   55
+> 
+> myreg <- reggen(100, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10)
+     [,1] [,2]
+[1,]   15    9
+[2,]   18    6
+[3,]   13   11
+[4,]   32   14
+[5,]   29   20
+[6,]   20   15
+> countcomp(c(dir1, dir2), myreg, 100)
+     [,1] [,2]
+[1,]   41   25
+[2,]   79   35
+[3,]   59   30
+[4,]  100   53
+[5,]   87   41
+[6,]  100   45
+> 
+> # Repeating with restriction.
+> 
+> myreg <- reggen(100, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10, restrict="chrA")
+     [,1] [,2]
+[1,]    9    7
+[2,]   11    7
+[3,]    4    4
+[4,]   12    3
+[5,]   14    6
+[6,]   10   10
+> countcomp(c(dir1, dir2), myreg, 20, restrict="chrB")
+     [,1] [,2]
+[1,]    0    0
+[2,]    0    0
+[3,]    0    0
+[4,]    0    0
+[5,]    0    0
+[6,]    0    0
+> countcomp(c(dir1, dir2), myreg, 30, restrict=c("chrB", "chrC"))
+     [,1] [,2]
+[1,]    0    0
+[2,]    0    0
+[3,]    0    0
+[4,]    0    0
+[5,]    0    0
+[6,]    0    0
+> 
+> ####################################################################################################
+> 
+> unlink("temp-marg", recursive=TRUE)
+> 
+> ####################################################################################################
+> # End.
+> 
+> proc.time()
+   user  system elapsed 
+ 36.308   0.372  36.755 
