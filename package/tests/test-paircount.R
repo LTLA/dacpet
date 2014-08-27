@@ -48,10 +48,11 @@ reggen <- function(num, width) {
 	return(output)
 }
 
-countcomp <- function(alldirs, regs, ext, filter=1L) {
-	observed <- recountPET(alldirs, regs, ext=ext, filter=1L)
+countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
+	observed <- recountPET(alldirs, regs, ext=ext, filter=1L, restrict=restrict)
 	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
 	dummycount <- observed$counts
+	dummytotes <- observed$totals
 	o <- order(regs)
 	sregs <- regs[o]
 
@@ -61,6 +62,7 @@ countcomp <- function(alldirs, regs, ext, filter=1L) {
 		cur1 <- overall[[x]]
 		for (y in names(cur1)) { 
 			cur2 <- cur1[[y]]
+			if (!is.null(restrict) && !(x %in% restrict && y %in% restrict)) { next }
 
 			collected <- list()
 			for (z in 1:length(alldirs)) {
@@ -100,6 +102,7 @@ countcomp <- function(alldirs, regs, ext, filter=1L) {
 
 				# Getting rid of them after loading.
 				dummycount[comp,z] <- dummycount[comp,z] - as.integer(final.counts)
+				dummytotes[z] <- dummytotes[z] - length(astart)
 			}
 		}
 	}
@@ -108,9 +111,12 @@ countcomp <- function(alldirs, regs, ext, filter=1L) {
 	if (any(dummycount!=0L)) { 
 		stop("interaction in observed set not identified, or identified multiple times") 
 	}
+	if (any(dummytotes!=0L)) { 
+		stop("totals don't match up")
+	}
 
 	# Checking what happens when I set the filter on.
-	filtered <- recountPET(alldirs, regs, ext=ext, filter=filter)
+	filtered <- recountPET(alldirs, regs, ext=ext, filter=filter, restrict=restrict)
 	keep <- rowSums(observed$counts) >= filter
 
 	fpairs <- observed$pairs[keep,,drop=FALSE]
@@ -212,6 +218,14 @@ myreg <- reggen(100, c(10, 25))
 countcomp(c(dir1, dir2), myreg, 10)
 countcomp(c(dir1, dir2), myreg, 100)
 countcomp(c(dir1, dir2), myreg, 100, filter=5)
+
+# Repeating with restriction.
+
+myreg <- reggen(100, c(10, 25))
+countcomp(c(dir1, dir2), myreg, 10, restrict="chrA")
+countcomp(c(dir1, dir2), myreg, 20, restrict="chrB")
+countcomp(c(dir1, dir2), myreg, 30, restrict=c("chrB", "chrC"))
+countcomp(c(dir1, dir2), myreg, 100, filter=5, restrict=c("chrA", "chrC"))
 
 ####################################################################################################
 

@@ -67,10 +67,11 @@ Type 'q()' to quit R.
 + 	return(output)
 + }
 > 
-> countcomp <- function(alldirs, regs, ext, filter=1L) {
-+ 	observed <- recountPET(alldirs, regs, ext=ext, filter=1L)
+> countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
++ 	observed <- recountPET(alldirs, regs, ext=ext, filter=1L, restrict=restrict)
 + 	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
 + 	dummycount <- observed$counts
++ 	dummytotes <- observed$totals
 + 	o <- order(regs)
 + 	sregs <- regs[o]
 + 
@@ -80,6 +81,7 @@ Type 'q()' to quit R.
 + 		cur1 <- overall[[x]]
 + 		for (y in names(cur1)) { 
 + 			cur2 <- cur1[[y]]
++ 			if (!is.null(restrict) && !(x %in% restrict && y %in% restrict)) { next }
 + 
 + 			collected <- list()
 + 			for (z in 1:length(alldirs)) {
@@ -119,6 +121,7 @@ Type 'q()' to quit R.
 + 
 + 				# Getting rid of them after loading.
 + 				dummycount[comp,z] <- dummycount[comp,z] - as.integer(final.counts)
++ 				dummytotes[z] <- dummytotes[z] - length(astart)
 + 			}
 + 		}
 + 	}
@@ -127,9 +130,12 @@ Type 'q()' to quit R.
 + 	if (any(dummycount!=0L)) { 
 + 		stop("interaction in observed set not identified, or identified multiple times") 
 + 	}
++ 	if (any(dummytotes!=0L)) { 
++ 		stop("totals don't match up")
++ 	}
 + 
 + 	# Checking what happens when I set the filter on.
-+ 	filtered <- recountPET(alldirs, regs, ext=ext, filter=filter)
++ 	filtered <- recountPET(alldirs, regs, ext=ext, filter=filter, restrict=restrict)
 + 	keep <- rowSums(observed$counts) >= filter
 + 
 + 	fpairs <- observed$pairs[keep,,drop=FALSE]
@@ -484,6 +490,42 @@ Type 'q()' to quit R.
 5     94     32
 6     94     94
 > 
+> # Repeating with restriction.
+> 
+> myreg <- reggen(100, c(10, 25))
+> countcomp(c(dir1, dir2), myreg, 10, restrict="chrA")
+  anchor target
+1     47     36
+2     47     47
+3     54     47
+4     64     36
+5     64     47
+6     64     54
+> countcomp(c(dir1, dir2), myreg, 20, restrict="chrB")
+  anchor target
+1    170    158
+2    199    158
+3    141    174
+4    141    115
+5    164    174
+6    164    115
+> countcomp(c(dir1, dir2), myreg, 30, restrict=c("chrB", "chrC"))
+  anchor target
+1    170    158
+2    199    158
+3    147    155
+4    141    174
+5    141    115
+6    164    174
+> countcomp(c(dir1, dir2), myreg, 100, filter=5, restrict=c("chrA", "chrC"))
+  anchor target
+1     36     36
+2     47     36
+3     47     47
+4     54     36
+5     54     47
+6     54     54
+> 
 > ####################################################################################################
 > 
 > unlink("temp-pair", recursive=TRUE)
@@ -493,4 +535,4 @@ Type 'q()' to quit R.
 > 
 > proc.time()
    user  system elapsed 
- 81.995   0.633  82.810 
+ 91.402   0.647  92.230 
