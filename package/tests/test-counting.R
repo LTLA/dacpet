@@ -53,8 +53,8 @@ getInterval <- function(pt, ext, left=0, right=0, maxed=NULL) {
 
 # We set up the comparison function to check our results. 
 
-comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
-	proposed<-countPET(files=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing)# restrict="chrA")
+comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L, restrict=NULL) {
+	proposed<-countPET(files=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing, restrict=restrict)
 	stopifnot(all(rowSums(proposed$count)[proposed$pair$index] >= filter))
 
 	# We check whether the regions make sense.
@@ -83,10 +83,14 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 	# We need to determine who's who.
 	x1<-h5ls(dir1)
 	x2<-h5ls(dir2)
+	total1 <- total2 <- 0L
 	for (k in 1:length(chromos)) {
 		cur.k<-names(chromos)[k]
 		for (l in 1:k) {
 			cur.l<-names(chromos)[l]
+			if (!is.null(restrict) && !(cur.k %in% restrict && cur.l %in% restrict)) {
+				next
+			}
 
 			# Loading counts.
 			x <- list()
@@ -94,11 +98,13 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 				x[[1]] <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
 			} else {
 				x[[1]] <- h5read(dir1, file.path("counts", cur.k, cur.l))
+				total1 <- total1 + nrow(x[[1]])
 			}
 			if (!any(x2$group==file.path("/counts", cur.k) & x2$name==cur.l)) { 
 				x[[2]] <- data.frame(anchor.pos=integer(0), target.pos=integer(0))
 			} else {
 				x[[2]] <- h5read(dir2, file.path("counts", cur.k, cur.l))
+				total2 <- total2 + nrow(x[[2]])
 			}
 			max.anchor<-chromos[k]
 			aspace<-space.pts[[k]]
@@ -157,6 +163,8 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L) {
 			stopifnot(all(other < filter))  # Checks for any rows above the filter in the truth that are not in the proposed.
 		}
 	}
+	stopifnot(identical(total1, proposed$totals[1]))
+	stopifnot(identical(total2, proposed$totals[2]))
 	return(head(proposed$pairs))
 }
 
@@ -243,6 +251,18 @@ comp(dir1, dir2, ext=55, left=6, right=-3)
 comp(dir1, dir2, ext=55, left=35, spacing=40, right=-35)
 comp(dir1, dir2, ext=55, right=-5, left=5, spacing=20)
 comp(dir1, dir2, ext=55, spacing=36, left=10, right=-10)
+
+# Checking behaviour under restriction.
+simgen(dir1, 50)
+simgen(dir2, 50)
+comp(dir1, dir2, ext=10, left=8, right=-5, restrict="chrA")
+comp(dir1, dir2, ext=21, left=12, spacing=13, right=-10, restrict="chrA")
+comp(dir1, dir2, ext=31, right=-5, left=8, restrict="chrA")
+comp(dir1, dir2, ext=10, left=8, right=-5, restrict="chrB")
+comp(dir1, dir2, ext=21, left=12, spacing=13, right=-10, restrict="chrB")
+comp(dir1, dir2, ext=31, right=-5, left=8, restrict="chrB")
+comp(dir1, dir2, ext=41, spacing=53, left=42, right=-2, restrict=c("chrA", "chrB"))
+comp(dir1, dir2, ext=51, filter=5, left=5, right=-1, restrict=c("chrB", "chrA"))
 
 ##################################################################################################
 # Cleaning up.
