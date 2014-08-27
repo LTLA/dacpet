@@ -1,4 +1,4 @@
-recountPET <- function(files, regions, ext=1L, filter=20L)
+recountPET <- function(files, regions, ext=1L, filter=20L, restrict=NULL)
 # This counts the number of PETs with each end overlapping one of 
 # the specified regions. It then reports counts for each pair of
 # regions with counts above the specified threshold.
@@ -18,8 +18,10 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 	sregions <- regions[o]
 	gr <- split(ranges(sregions), seqnames(sregions))
 	oridex <- split(o, seqnames(sregions))
-	chrs <- names(gr)
-	.getChrs(files) # To check lengths.
+
+	chromosomes <- .getChrs(files)
+	chrs <- names(chromosomes)
+	my.chrs <- names(oridex)
 
     # Running through each pair of chromosomes.
     overall <- .loadIndices(files)
@@ -29,12 +31,23 @@ recountPET <- function(files, regions, ext=1L, filter=20L)
 	totals <- integer(nlibs)
 
     for (anchor in names(overall)) {
-        if (! (anchor %in% chrs) ) { next }
+		stopifnot(anchor %in% chrs)
+		if (!is.null(restrict) && !(anchor %in% restrict)) { next }
         current<-overall[[anchor]]
         for (target in names(current)) {
-			if (! (target %in% chrs)) { next }
+			stopifnot(target %in% chrs)
+			if (!is.null(restrict) && !(target %in% restrict)) { next }
             is.okay <- current[[target]]
-            
+
+			# Deciding whether to skip.
+			if (! (anchor %in% my.chrs) || ! (target %in% my.chrs)) {
+				for (x in 1:length(is.okay)) { 
+					if (is.okay[x]) { totals[x] <- totals[x] + nrow(.getPairs(files[x], anchor, target)) }
+				}
+				next
+			}
+
+			# Otherwise, collating the marginal counts.
 			pulled <- list()
 			for (x in 1:length(is.okay)) { 
                 if (!is.okay[x]) {

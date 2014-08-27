@@ -1,4 +1,4 @@
-marginPET <- function(files, regions, ext=1L)
+marginPET <- function(files, regions, ext=1L, restrict=NULL)
 # This counts the number of PETs with each end overlapping one of 
 # the specified regions. It then reports counts for each pair of
 # regions with counts above the specified threshold.
@@ -17,8 +17,10 @@ marginPET <- function(files, regions, ext=1L)
 	sregions <- regions[o]
 	gr <- split(ranges(sregions), seqnames(sregions))
 	oridex <- split(o, seqnames(sregions))
-	chrs <- names(gr)
-	.getChrs(files) # To check lengths.
+
+	chromosomes <- .getChrs(files)
+	chrs <- names(chromosomes)
+	my.chrs <- names(oridex)
 
     # Running through each pair of chromosomes.
     overall <- .loadIndices(files)
@@ -29,12 +31,23 @@ marginPET <- function(files, regions, ext=1L)
 
 	all.margins <- matrix(0L, nrow=length(regions), ncol=nlibs)
     for (anchor in names(overall)) {
-		if (! (anchor %in% chrs) ) { next }
+		stopifnot(anchor %in% chrs)
+		if (!is.null(restrict) && !(anchor %in% restrict)) { next }
         current<-overall[[anchor]]
         for (target in names(current)) {
-        	if (! (target %in% chrs)) { next }
+			stopifnot(target %in% chrs)
+			if (!is.null(restrict) && !(target %in% restrict)) { next }
             is.okay <- current[[target]]
-            
+
+			# Deciding whether or not to skip after computing the total counts.
+			if (! (anchor %in% my.chrs) || ! (target %in% my.chrs)) {
+				for (x in 1:length(is.okay)) { 
+					if (is.okay[x]) { totals[x] <- totals[x] + nrow(.getPairs(files[x], anchor, target)) }
+				}
+				next
+			}
+
+			# Otherwise, collating the marginal counts.
 			pulled <- list()
 			for (x in 1:length(is.okay)) { 
                 if (!is.okay[x]) {
@@ -49,8 +62,6 @@ marginPET <- function(files, regions, ext=1L)
 				# Performing overlaps between the requested chromosomes. 
 				alap <- findOverlaps(IRanges(ar$start, ar$end-1L), gr[[anchor]])
 				tlap <- findOverlaps(IRanges(tr$start, tr$end-1L), gr[[target]])
-
-				# Computing the total number in each subsection.
 
 				# Computing the support for each pair of regions.
 				collected <- .Call(cxx_count_margins, 
