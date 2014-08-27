@@ -30,14 +30,23 @@ SEXP count_margins (SEXP aq, SEXP as, SEXP tq, SEXP ts, SEXP samechr) try {
 
 	// Setting up some variables.
 	std::map<region, int> collected;
-	int i=0, j=0, jlast, jcopy;
+	int i=0, j=0, current;
 	
 	// Running through and collecting all region pairs for each PET.
-	while (i < na && j<nt) {
-		const int& currenta=aqptr[i];
-		const int& currentt=tqptr[j];
-		const bool isanchor = (currenta <= currentt);
-		const int& current=(isanchor ? currenta : current);
+	while (1) {
+		if (i<na) {
+ 		   	if (j<nt) {
+				current=(aqptr[i] <= tqptr[j] ? aqptr[i] : tqptr[j]);
+			} else {
+				current=aqptr[i];
+			}
+		} else {
+			if (j < nt) {
+				current=tqptr[j];				
+			} else {
+				break;
+			}
+		}
 
 		// Adding anchors (and advancing, if current==currenta).
 		while (i < na && current==aqptr[i]) {
