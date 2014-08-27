@@ -44,6 +44,10 @@ contiguous non-overlapping bins of size equal to \code{width}. Bins are often
 easier to interpret than windows as the absence of overlaps ensures that
 results are non-redundant. Users should set \code{filter=1L} for a true
 binning strategy whereby all non-empty bins are reported.
+
+One can specify the chromosomes of interest in \code{restrict}.
+This is often useful to avoid loading counts for uninteresting reference sequences (e.g., scaffolds) in the genome build.
+By default, counts will be collected for all pairs of chromosomes.
 }
 
 \section{Explaining the output}{
