@@ -13,10 +13,8 @@ marginPET <- function(files, regions, ext=1L, restrict=NULL)
     } else if (ext < 0) {
         stop("fragment length must be a non-negative integer")
     }
-	o <- GenomicRanges::order(regions)
-	sregions <- regions[o]
-	gr <- split(ranges(sregions), seqnames(sregions))
-	oridex <- split(o, seqnames(sregions))
+	gr <- split(ranges(regions), seqnames(regions))
+	oridex <- split(1:length(regions), seqnames(regions))
 
 	chromosomes <- .getChrs(files)
 	chrs <- names(chromosomes)
