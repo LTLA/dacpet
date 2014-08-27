@@ -1,11 +1,11 @@
 \name{recountPET}
 \alias{recountPET}
 
-\title{Count PETs into regions}
+\title{Count PETs into region pairs}
 \description{Count PETs into pairs of user-specified regions across the interaction space}
 
 \usage{
-recountPET(files, regions, ext=1L, filter=20L)
+recountPET(files, regions, ext=1L, filter=20L, restrict=NULL)
 }
 
 \arguments{
@@ -13,11 +13,12 @@ recountPET(files, regions, ext=1L, filter=20L)
 \item{regions}{a \code{GRanges} object containing the user's regions of interest}
 \item{ext}{an integer scalar specifying the fragment length for read extension }
 \item{filter}{an integer scalar specifying the minimum count sum for an interaction}
+\item{restrict}{a character vector containing the chromosomes to be analyzed}
 }
 	
 \details{
 This function will extend each tag by \code{ext} in the direction of the tag. 
-For any given pair of regions, it will count the number of extended tags that overlap each region. 
+For any given pair of regions, it will count the number of pairs with one extended tag overlapping each region. 
 This is performed for each processed tag file. 
 Region pairs that have a sum of counts less than \code{filter} across all files will be discarded. 
 Again, \code{ext} is provided here as a formality but isn't particularly useful for actual analyses, see \code{\link{countPET}}.
