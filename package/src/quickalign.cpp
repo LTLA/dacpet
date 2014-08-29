@@ -97,7 +97,11 @@ int quickalign::score_incoming(const char* target) {
 	int inclen=0;
 	while (target[inclen]!='\0') { ++inclen; }
 
-	// Identifies the longest matching subsequence, based on the words.
+	/* Identifies the longest matching subsequence, based on the words.
+ 	 * Despite the appearance of two loops, this is usually linear on the
+ 	 * target sequence length as you won't usually get multiple matches (i.e.
+ 	 * refposes has size 1).
+	 */
 	std::deque<std::pair<int, int> > last_match(reflen, std::make_pair(-1, -1));
 	int refstart, incstart, matchlen=0;
 	do {
