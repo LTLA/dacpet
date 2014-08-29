@@ -819,6 +819,11 @@ o <- order(final$PValue)
 write.table(final[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALSE)
 @
 
+Note that the interactions of interest are those where the homo-linker count is greater than the hetero-linker count.
+Power can be improved by filtering out all bin pairs with an inappropriate log-fold change, prior to applying the BH method.
+This removes the uninteresting tests and reduces the severity of the FDR correction.
+That said, filtering has no effect in this particular dataset as there are no bin pairs with a positive log-fold change. 
+
 \section{Visualization with plaid plots}
 It comes a time that some visualization of interesting results is necessary.
 This can be performed using the \code{plotChIA} function, which constructs a plaid plot of the interaction space \citep{lieberman2009hic}. 
