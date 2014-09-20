@@ -1,18 +1,14 @@
-plotChIA <- function(file, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
+plotChIA <- function(file, anchor, target=anchor, 
    width=1000, cap=50, xlab=NULL, ylab=NULL, col="red", diag=TRUE, ...)
 # This generates a ChIA-PET plot, akin to the plaid plots for Hi-C data. 
 #
 # written by Aaron Lun
 # 2 December 2013	
 {
-	if (is.null(target.lim)) {
-		target.lim<-c(start(target), end(target))
-		target<-as.character(seqnames(target))
-	}
-   	if (is.null(anchor.lim)) {
-		anchor.lim<-c(start(anchor), end(anchor))
-		anchor<-as.character(seqnames(anchor))
-	}
+	target.lim<-c(start(target), end(target))
+	target<-as.character(seqnames(target))
+	anchor.lim<-c(start(anchor), end(anchor))
+	anchor<-as.character(seqnames(anchor))
    	if (length(anchor)!=1L || length(anchor.lim)!=2L) { stop("exactly one anchor range is required for plotting") }
     if (length(target)!=1L || length(target.lim)!=2L) { stop("exactly one target range is required for plotting") }
 

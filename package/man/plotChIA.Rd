@@ -5,16 +5,14 @@
 \description{Make a plaid plot of tag pairs from a processed tag file}
 
 \usage{
-plotChIA(file, anchor, anchor.lim=NULL, target=anchor, target.lim=anchor.lim,
-	width=1000, cap=50, xlab=NULL, ylab=NULL, col="red", diag=TRUE, ...)
+plotChIA(file, anchor, target=anchor, width=1000, cap=50, 
+    xlab=NULL, ylab=NULL, col="red", diag=TRUE, ...)
 }
 
 \arguments{
 \item{file}{a character string containing a path to a processed tag file}
-\item{anchor}{a \code{GRanges} object specifying the anchor region, or a character string specifying the anchor chromosome}
-\item{anchor.lim}{a numeric vector of length 2, specifying the coordinates of the anchor region}
-\item{target}{a \code{GRanges} object specifying the target region, or a character string specifying the target chromosome}
-\item{target.lim}{a numeric vector of length 2, specifying the coordinates of the target region}
+\item{anchor}{a \code{GRanges} object specifying the anchor region}
+\item{target}{a \code{GRanges} object specifying the target region}
 \item{width}{an integer scalar denoting the width of each box in the plot}
 \item{cap}{an integer scalar specifying the count in each box at which the colour is saturated}
 \item{xlab}{a character string specifying the x-axis label, set to the anchor chromosome name by default}
@@ -64,10 +62,6 @@ stats <- preparePET(out1, "gunkAA")
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=5e6, cap=1)
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=1e6, cap=1)
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=2e6, cap=1, diag=FALSE)
-
-# Different ways of saying the same thing.
-plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), width=2e6, cap=5)
-plotChIA("gunkAA", anchor='chr1', anchor.lim=c(1e7, 12e7), width=2e6, cap=5)
 
 # Using a different anchor/target range.
 plotChIA("gunkAA", anchor=GRanges('chr1', IRanges(1e7, 12e7)), 
