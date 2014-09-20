@@ -9,31 +9,32 @@ compressMatrix(data, hetero=NULL, libname=NULL)
 }
 
 \arguments{
-\item{data}{a list of interaction data, like that produced by \code{\link{countPET}} or \code{\link{recountPET}}}
+\item{data}{an \code{Ilist} of interaction data, like that produced by \code{\link{countPET}} or \code{\link{recountPET}}}
 \item{hetero}{a logical vector indicating whether the tag file contains heterolinker counts}
 \item{libname}{a character vector containing the library name for each tag file}
 }
 
 \details{
-After processing with \code{\link{preparePET}}, each library will yield multiple tag files corresponding to different linker combinations. 
+After processing with \code{\link{preparePET}}, each library will yield multiple tag files corresponding to different linker combinations.
+Homo-linker counts for each library will then be added together and reported as a single entry in \code{counts}. 
+This is also performed for hetero-linkers, if multiple such counts are present for a given library.
+
 The library name in \code{libname} should be constant for all tag files generated from the same library. 
 Tag files corresponding to hetero-linkers should be denoted as \code{TRUE} in \code{hetero}. 
-If either \code{hetero} or \code{libname} is \code{NULL}, the vector values are inferred from \code{data$files}.
-Homo-linker counts for each library will then be added together and reported in \code{counts}. 
+If either \code{hetero} or \code{libname} is \code{NULL}, the vector values are inferred from \code{info(data)$files}.
 
-Similar addition is performed for \code{totals}. However, it is worth pointing
-out that the all entries for the same library will have the same value in
-\code{totals}. This is because homo- and hetero-linker counts are taken from a
-single library. Computing the library size for only, say, the hetero-linker
-counts would be misleading as the difference in the total number of reads is
-not attributable to sequencing depth.
+The total number of PETs in each library is computed from the totals for each tag file in \code{info(data)$totals}. 
+All entries for the same library will have the same final total.
+This is because homo- and hetero-linker counts are taken from a single library. 
+Computing the library size for only, say, the hetero-linker counts would be misleading as the difference in the total number of reads is not attributable to sequencing depth.
 }
 
 \value{
-A list containing all the elements of \code{data}, with changes to the following elements:
-\item{counts}{an integer count matrix where each column corresponds to a hetero-/homo-linker
-count in a library, and each row corresponds to a pair of windows}
-\item{totals}{an integer vector specifying the total number of tag pairs in each library}
+An \code{IList} containing all the elements of \code{data}, with some changes.
+For each feature, all homo-linker counts for a given library are added to form a single count.
+This is repeated for the hetero-linker counts.
+The total number of PETs is also computed for each library, across all linker combinations.
+The value of \code{hetero} and \code{libname} is stored in the \code{info} slot.
 }
 
 \seealso{
@@ -55,8 +56,8 @@ allfiles <- c("gunk_AA", "gunk_AB", "gunk_BB")
 # Automatic detection of status
 data <- countPET(allfiles, width=1e6, filter=1L)
 freqs <- compressMatrix(data)
-freqs$hetero
-freqs$libname
+info(freqs)$hetero
+info(freqs)$libname
 
 # Manual detection
 is.hetero <- grepl("AB$", allfiles)
@@ -64,6 +65,6 @@ lib.name <- sub("[AB][AB]$", "", allfiles)
 freqs <- compressMatrix(data, is.hetero, lib.name)
 
 # Comparing before and after compression.
-nrow(data$counts)
-nrow(freqs$counts)
+head(counts(data))
+head(counts(freqs))
 }

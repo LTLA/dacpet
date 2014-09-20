@@ -21,13 +21,17 @@ For each region, it will count the number of pairs with at least one extended ta
 This is defined as the marginal count and is a useful measure of overall coverage in a ChIA-PET experiment.
 Counting is performed in this manner for each processed tag file. 
 Again, \code{ext} is provided here as a formality but isn't particularly useful for actual analyses, see \code{\link{countPET}}.
+
+Note that the \code{IList} container is only used here for consistency.
+Each row of the count matrix contains counts for a single region.
+The anchor/target distinction has no meaning, as pairs of regions are not involved.
+For a given output object \code{x}, the same result will be obtained from \code{regions(x)}, \code{anchors(x)} and \code{targets(x)}.
 }
 
 \value{
-A list containing:
-\item{counts}{an integer matrix with one column per tag file, specifying the marginal counts for each region}
-\item{totals}{an integer vector specifying the total number of PETs in each tag file}
-\item{files}{a character vector containing the paths to the processed tag files}
+An \code{IList} containing the counts for each of the specified \code{regions}.
+For each region, one count is returned for each of the input \code{files}.
+The \code{info} slot consists of a dataframe with the numeric field \code{totals} (i.e., the total number of PETs) and the character field \code{files} (i.e., the file path) for each of the input tag files.
 }
 
 \seealso{
@@ -54,12 +58,12 @@ stats <- preparePET(out2, "gunkBB")
 status <- c("gunkAA", "gunkAB", "gunkBB")
 myregs <- GRanges(c("chr1", "chr2", "chr3"),
 	IRanges(c(1e7, 2e7, 3e7), c(12e7, 13e7, 14e7)))
-data <- marginPET(status, myregs, filter=0L)
-head(data$counts)
+data <- marginPET(status, myregs)
+head(counts(data))
 
 # compressMatrix works here.
 is.hetero <- grepl("AB$", status)
 lib.name <- sub("[AB][AB]$", "", status)
 freqs <- compressMatrix(data, is.hetero, lib.name)
-head(freqs$counts)
+head(counts(freqs))
 }

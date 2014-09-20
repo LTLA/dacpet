@@ -21,27 +21,25 @@ This function will extend each tag by \code{ext} in the direction of the tag.
 For any given pair of regions, it will count the number of pairs with one extended tag overlapping each region. 
 This is performed for each processed tag file. 
 Region pairs that have a sum of counts less than \code{filter} across all files will be discarded. 
-Again, \code{ext} is provided here as a formality but isn't particularly useful for actual analyses, see \code{\link{countPET}}.
+Again, \code{ext} is provided here as a formality but isn't particularly useful for actual analyses; see \code{\link{countPET}} for more details.
 
-Some caution is required when intepreting the output \code{pairs}. 
-The pairs of indices point to the interacting regions in \code{regions}.
-The anchor index points to the region with a chromosomal name with a larger rank (i.e., later in alphanumerical ordering).
-If the chromosomes are the same, the anchor index points to the region with the larger start position.
-Unlike \code{\link{countPET}}, the actual value of the anchor index may be smaller than that of the target index, if \code{regions} is unsorted.
+Note that the input \code{regions} is re-ordered in the final output.
+This is necessary to preserve the consistency of the anchor/target definitions.
+In particular, all anchor indices are guaranteed to be greater than or equal to the target indices.
+If the original sorting order is required, it can be accessed in the \code{original} field of the metadata of \code{region(x)}, where \code{x} is the \code{IList} returned by this function.
 }
 
 \value{
-A list containing:
-\item{counts}{an integer matrix with one column per tag file, specifying the counts for each region pair}
-\item{pairs}{a dataframe with integer fields, containing the indices of the interacting regions in each pair}
-\item{totals}{an integer vector specifying the total number of PETs in each tag file}
-\item{region}{a \code{GRanges} object containing the genomic coordinates of each region}
-\item{files}{a character vector containing the paths to the processed tag files}
+An \code{IList} object is returned containing counts for interactions between pairs of elements in \code{regions}.
+For each pair of regions, one count is returned for each tag file.
+The \code{info} slot contains a dataframe with \code{totals} and \code{files} fields, specifying the total number of PETs in and the path to each tag file, respectively.
+The \code{region} slot contains a re-ordered version of \code{regions}.
 }
 
 \seealso{
 \code{\link{compressMatrix}},
-\code{\link{countPET}}
+\code{\link{countPET}},
+\code{\link{IList-class}}
 }
 
 \author{Aaron Lun}
@@ -64,11 +62,11 @@ status <- c("gunkAA", "gunkAB", "gunkBB")
 myregs <- GRanges(c("chr1", "chr2", "chr3"),
 	IRanges(c(1e7, 2e7, 3e7), c(12e7, 13e7, 14e7)))
 data <-recountPET(status, myregs, filter=0L)
-head(data$counts)
+head(counts(data))
 
 # compressMatrix works here.
 is.hetero <- grepl("AB$", status)
 lib.name <- sub("[AB][AB]$", "", status)
 freqs <- compressMatrix(data, is.hetero, lib.name)
-head(freqs$counts)
+head(counts(freqs))
 }

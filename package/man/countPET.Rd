@@ -73,17 +73,15 @@ be performed using the \code{\link{compressMatrix}} function.
 }
 
 \value{
-A list containing:
-\item{counts}{an integer matrix with one column per input file, specifying the count for each window pair}
-\item{totals}{an integer vector specifying the total number of PETs in each tag file}
-\item{pairs}{a dataframe with integer fields, containing the start/end indices and the index of the count matrix for each group of window pairs}
-\item{region}{a \code{GRanges} object containing the genomic coordinates of each window}
-\item{files}{a character vector containing the paths to the processed tag files}
+An \code{Ilist} object is returned, containing the counts for each pair of interacting windows.
+For each window pair, one count is returned for each of the input \code{files}.
+The \code{info} slot consists of a dataframe with the numeric field \code{totals} (i.e., the total number of PETs) and the character field \code{files} (i.e., the file path) for each of the input tag files.
 }
 
 \seealso{
 \code{\link{compressMatrix}},
-\code{\link{recountPET}}
+\code{\link{recountPET}},
+\code{\link{IList-class}}
 }
 
 \author{Aaron Lun}
@@ -97,11 +95,13 @@ out3 <- system.file("exdata", "li_BB.bam", package="dacpet")
 stats <- preparePET(out2, "gunkBB")
 
 # Filter is set too high for all of these, and they're shown here only for fun.
-data <- countPET(c("gunkAA", "gunkAB", "gunkBB"))
-data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000)
-data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000, spacing=5000)
-data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000, spacing=5000, restrict=c("chr1", "chr2"))
-
-# No filter, so things show up.
-data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000) 
+data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), filter=1)
+head(counts(data))
+data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000, filter=1)
+head(counts(data))
+data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000, spacing=5000, filter=1)
+head(counts(data))
+data <- countPET(c("gunkAA", "gunkAB", "gunkBB"), width=10000, spacing=5000, 
+    restrict=c("chr1", "chr2"), filter=1)
+head(counts(data))
 }
