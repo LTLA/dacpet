@@ -50,11 +50,12 @@ reggen <- function(num, width) {
 
 countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
 	observed <- recountPET(alldirs, regs, ext=ext, filter=1L, restrict=restrict)
-	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
-	dummycount <- observed$counts
-	dummytotes <- observed$totals
+	observed.interact <- paste0(anchors(observed, id=TRUE), ".", targets(observed, id=TRUE))
+	dummycount <- counts(observed)
+	dummytotes <- info(observed)$totals
 	o <- order(regs)
-	sregs <- regs[o]
+	stopifnot(identical(o, regions(observed)$original))
+	regs <- regs[o]
 
 	# Picking out the truth.
 	overall <- dacpet:::.loadIndices(alldirs)
@@ -74,11 +75,11 @@ countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
 				}
 				astart <- ifelse(stuff$anchor.pos > 0, stuff$anchor.pos - ext + 1L, -stuff$anchor.pos)
 				aend <- astart + ext - 1L
-				alap <- findOverlaps(GRanges(x, IRanges(astart, aend)), sregs)
+				alap <- findOverlaps(GRanges(x, IRanges(astart, aend)), regs)
 
 				tstart <- ifelse(stuff$target.pos > 0, stuff$target.pos - ext + 1L, -stuff$target.pos)
 				tend <- tstart + ext - 1L
-				tlap <- findOverlaps(GRanges(y, IRanges(tstart, tend)), sregs)
+				tlap <- findOverlaps(GRanges(y, IRanges(tstart, tend)), regs)
 
 				# Collating them to identify combinations.
 				a.ok <- split(subjectHits(alap), queryHits(alap))
@@ -87,8 +88,8 @@ countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
 				all.results <- list()
 				for (pet in both.ok) {
 					all.combos <- merge(a.ok[[pet]], t.ok[[pet]])
-					interactions <- paste0(o[pmax(all.combos[,1], all.combos[,2])], ".",
-							o[pmin(all.combos[,1], all.combos[,2])])
+					interactions <- paste0(pmax(all.combos[,1], all.combos[,2]), ".",
+							pmin(all.combos[,1], all.combos[,2]))
 					all.results[[pet]] <- unique(interactions)
 				}
 				all.results <- unlist(all.results, use.names=FALSE)
@@ -97,7 +98,7 @@ countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
 				final.counts <- table(all.results)
 				comp <- match(names(final.counts), observed.interact)
 				if (any(is.na(comp))) { stop("interaction not in canonical set") }
-				if (!identical(as.integer(final.counts), observed$counts[comp,z])) { 
+				if (!identical(as.integer(final.counts), counts(observed)[comp,z])) { 
 					stop("mismatches in count values") }
 
 				# Getting rid of them after loading.
@@ -117,16 +118,14 @@ countcomp <- function(alldirs, regs, ext, filter=1L, restrict=NULL) {
 
 	# Checking what happens when I set the filter on.
 	filtered <- recountPET(alldirs, regs, ext=ext, filter=filter, restrict=restrict)
-	keep <- rowSums(observed$counts) >= filter
+	keep <- rowSums(counts(observed)) >= filter
 
-	fpairs <- observed$pairs[keep,,drop=FALSE]
-	rownames(fpairs) <- NULL
-	fcounts <- observed$counts[keep,,drop=FALSE]
-
-	if (!identical(fpairs, filtered$pairs) || !identical(fcounts, filtered$counts)) { 
+	if (!identical(anchors(observed[keep,], id=TRUE), anchors(filtered, id=TRUE)) ||
+		!identical(targets(observed[keep,], id=TRUE), targets(filtered, id=TRUE)) ||
+		!identical(counts(observed[keep,]), counts(filtered))) {
 		stop("filtering is not correct") }
 
-	return(head(observed$pairs))
+	return(head(data.frame(anchor=anchors(observed, id=TRUE), target=targets(observed, id=TRUE))))
 }
 
 ####################################################################################################

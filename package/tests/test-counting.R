@@ -55,7 +55,7 @@ getInterval <- function(pt, ext, left=0, right=0, maxed=NULL) {
 
 comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L, restrict=NULL) {
 	proposed<-countPET(files=c(dir1, dir2), ext=ext, shift=left, width=left+right+1, filter=filter, spacing=spacing, restrict=restrict)
-	stopifnot(all(rowSums(proposed$count)[proposed$pair$index] >= filter))
+	stopifnot(all(rowSums(counts(proposed)) >= filter))
 
 	# We check whether the regions make sense.
 	checker <- list()
@@ -78,7 +78,7 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L, restri
 		last.off <- length(space.pts[[cur.chr]]) + last.off
 	}
 	checker$gunk <- NULL
-	if (!identical(checker, proposed$region)) { stop("mismatch in proposed regions") }
+	if (!identical(checker, regions(proposed))) { stop("mismatch in proposed regions") }
 	
 	# We need to determine who's who.
 	x1<-h5ls(dir1)
@@ -142,13 +142,15 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L, restri
 
 				# Subtracting off the elements that we know.
 				wascovered<-matrix(FALSE, nrow(submat1), ncol(submat1))
-				keep<-as.logical(seqnames(getAnchor(proposed))==cur.k & seqnames(getTarget(proposed))==cur.l)
+				keep<-as.logical(seqnames(anchors(proposed))==cur.k & seqnames(targets(proposed))==cur.l)
 				if (any(keep)){ 
-					kept<-proposed$pairs[keep,,drop=FALSE]
-					kept.counts <- proposed$counts[keep,,drop=FALSE]
-					for (i in 1:nrow(kept)) {
-						arange<-kept$anchor[i] - aoff
-						trange<-kept$target[i] - toff
+					kept.a <- anchors(proposed, id=TRUE)[keep]
+					kept.t <- targets(proposed, id=TRUE)[keep]
+					kept.counts <- counts(proposed)[keep,,drop=FALSE]
+
+					for (i in 1:sum(keep)) {
+						arange<-kept.a[i] - aoff
+						trange<-kept.t[i] - toff
  			   			submat1[arange,trange]<-submat1[arange,trange]-kept.counts[i,g] 
 						if (any(wascovered[arange,trange])) { stop("overlapping boxes reported in output") }
 						wascovered[arange,trange]<-TRUE
@@ -163,9 +165,10 @@ comp <- function(dir1, dir2, ext, spacing=10, left=0, right=0, filter=1L, restri
 			stopifnot(all(other < filter))  # Checks for any rows above the filter in the truth that are not in the proposed.
 		}
 	}
-	stopifnot(identical(total1, proposed$totals[1]))
-	stopifnot(identical(total2, proposed$totals[2]))
-	return(head(proposed$pairs))
+	stopifnot(identical(total1, info(proposed)$totals[1]))
+	stopifnot(identical(total2, info(proposed)$totals[2]))
+	return( head(data.frame(anchor=anchors(proposed, id=TRUE), 
+				target=targets(proposed, id=TRUE))) )
 }
 
 ###################################################################################################

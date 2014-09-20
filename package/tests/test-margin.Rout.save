@@ -69,9 +69,8 @@ Type 'q()' to quit R.
 > 
 > countcomp <- function(alldirs, regs, ext, restrict=NULL) {
 + 	observed <- marginPET(alldirs, regs, ext=ext, restrict=restrict)
-+ 	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
-+ 	dummycount <- observed$counts
-+ 	dummytotes <- observed$totals
++ 	dummycount <- counts(observed)
++ 	dummytotes <- info(observed)$totals
 + 
 + 	# Picking out the truth.
 + 	overall <- dacpet:::.loadIndices(alldirs)
@@ -119,7 +118,7 @@ Type 'q()' to quit R.
 + 	if (any(dummytotes!=0L)) { 
 + 		stop("totals don't match up")
 + 	}
-+ 	return(head(observed$counts))
++ 	return(head(counts(observed)))
 + }
 > 
 > ####################################################################################################
@@ -405,4 +404,4 @@ Type 'q()' to quit R.
 > 
 > proc.time()
    user  system elapsed 
- 36.308   0.372  36.755 
+ 38.409   0.393  38.884 

@@ -50,9 +50,8 @@ reggen <- function(num, width) {
 
 countcomp <- function(alldirs, regs, ext, restrict=NULL) {
 	observed <- marginPET(alldirs, regs, ext=ext, restrict=restrict)
-	observed.interact <- paste0(observed$pairs$anchor, ".", observed$pairs$target)
-	dummycount <- observed$counts
-	dummytotes <- observed$totals
+	dummycount <- counts(observed)
+	dummytotes <- info(observed)$totals
 
 	# Picking out the truth.
 	overall <- dacpet:::.loadIndices(alldirs)
@@ -100,7 +99,7 @@ countcomp <- function(alldirs, regs, ext, restrict=NULL) {
 	if (any(dummytotes!=0L)) { 
 		stop("totals don't match up")
 	}
-	return(head(observed$counts))
+	return(head(counts(observed)))
 }
 
 ####################################################################################################
