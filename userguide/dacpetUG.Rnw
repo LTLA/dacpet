@@ -43,7 +43,7 @@
 % Set to change date for document, not compile date.
 \date{First edition 10 July 2014\\
 \vspace{6pt}
-Last revised 28 July 2014}
+Last revised 20 September 2014}
 
 % Removing the bibliography title so it shows up in the contents.
 \makeatletter
@@ -290,8 +290,14 @@ This is performed for each linker combination in each library such that a set of
 <<>>=
 countwidth <- 5000
 actual <-countPET(curfiles, width=countwidth, filter=10)
-head(actual$counts)
+actual
 @
+
+The returned \code{IList} object contains the counts for each bin pair in each tag file.
+Each row of the count matrix represents one bin pair, and each column represents a corresponding entry in the input \code{curfiles}.
+Each bin pair consists of one anchor and one target bin (specified in \code{anchor} and \code{target}, respectively), where the anchor bin is that with the higher genomic coordinate.
+This avoids redundant permutations.
+Information about each tag file, such as the total number of PETs, is contained in the \code{info} slot.
 
 The function can also be configured to count tag pairs across pairs of sliding windows across the genome. 
 This provides greater spatial resolution than bins as optimal counting can be achieved for features that span the boundary of a bin. 
@@ -412,7 +418,7 @@ Reverse read extension can also be done but this is probably unnecessary.
 
 <<>>=
 peaked <- recountPET(curfiles, peaks, filter=20L)
-head(peaked$counts)
+peaked
 @
 
 \section{Aggregating homo- and hetero-linker counts}
@@ -423,7 +429,7 @@ This is done with the \code{compressMatrix} function for either the binned or pe
 
 <<>>=
 freqs <- compressMatrix(actual, is.het, libname)
-head(freqs$counts)
+freqs
 @
 
 The total number of tag pairs in each library is also computed. 
@@ -431,10 +437,6 @@ Note that this refers to each library rather than each tag file, such that each 
 Thus, all homo-/hetero-linker counts from the same library are assigned the same total. 
 This is appropriate as sequencing depth is the same for all counts sourced from the same library.
 Differences in homo-/hetero-linker counts within a library should not be attributed to differences in sequencing depth.
-
-<<>>=
-freqs$totals
-@
 
 % More concretely, one can imagine a situation where there are many genuine
 % interactions.  This means that there will be widespread increases in the
@@ -463,8 +465,7 @@ Any inter-chromosomal pairs are marked as \code{NA} and must also be included.
 
 <<>>=
 keep <- gapped > 1 | is.na(gapped)
-freqs$counts <- freqs$counts[keep,]
-freqs$pairs <- freqs$pairs[keep,]
+freqs <- freqs[keep,]
 sum(keep)
 @
 
@@ -481,7 +482,8 @@ Filtering on the average count (as computed by the aveLogCPM function in the edg
 
 <<>>=
 require(edgeR)
-a.cpm <- aveLogCPM(freqs$counts, lib.size=freqs$totals)
+pc <- 1e-3
+a.cpm <- aveLogCPM(asDGEList(freqs), prior.count=pc)
 summary(a.cpm)
 @
 
@@ -492,26 +494,31 @@ In this case, a relatively mild threshold is used given that the bulk of filteri
 
 <<>>=
 keep <- a.cpm > -1
-freqs$counts <- freqs$counts[keep,]
-freqs$pairs <- freqs$pairs[keep,]
+freqs <- freqs[keep,]
 summary(keep)
 @
 
 A more educated choice of filter threshold can be obtained by identifying putative genuine interactions as those that have say, a \code{X}-fold higher average abundance than a non-specific interaction. If one assumes that most of the interaction space is filled with non-specific contacts, it is simple to calculate the threshold based on the abundance of those contacts. 
+Note that larger bins are required to count non-specific contacts due to the sparsity in the interaction space. 
 
 <<>>=
-X <- 50000
 binsize <- 1e6
 binned <-countPET(curfiles, width=binsize, filter=1)
 rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
-threshold <- median(aveLogCPM(rebin$counts, lib.size=rebin$totals))
-size.adjust <- 2*log2(binsize/countwidth)
-threshold + log2(X) - size.adjust
 @
 
-Note that larger bins are required to count non-specific contacts due to the sparsity in the interaction space. 
-This means that some adjustments for size are necessary to compare the average non-specific abundance to the average abundance of each bin pair of interest.
-The above code adjusts for the differences in the \textit{areas} of the interaction space that were used for tag pair collection with each bin size.
+The abundance of larger bin pairs can be calculated and compared to the values in \code{a.cpm}.
+Some adjustments are necessary to account for the differences in the \textit{areas} for tag pair collection with each bin size.
+The median of the adjusted values is then increased by \code{X} and used as the threshold.
+
+<<>>=
+adjusted <- (binsize/countwidth)^2
+threshold <- median(aveLogCPM(asDGEList(rebin), prior.count=pc*adjusted))
+threshold <- threshold - log2(adjusted)
+X <- 5000
+keep <- a.cpm >= threshold + log2(X) 
+summary(keep)
+@
 
 % You might well ask, why bother doing the testing if you're just going to
 % select for it here? The answer is that this selection doesn't compute
@@ -590,7 +597,7 @@ Again, large bins are necessary to count rare non-specific events.
 <<>>=
 binned <-countPET(curfiles, width=1e7, filter=1)
 rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
-head(rebin$counts)
+head(counts(rebin))
 @
 
 The M-value for each interaction is defined as the log-ratio of homo- to hetero-linker counts. 
@@ -600,10 +607,10 @@ However, the bulk of interactions have a substantially higher M-value.
 This is consistent with the above-expected homo-linker counts for the nuclear-mitochondrial ``interactions''. 
 
 <<eval=FALSE,label=plotma>>=
-adj.counts <- cpm(rebin$counts, lib.size=rebin$totals, log=TRUE)
+adj.counts <- cpm(asDGEList(rebin), log=TRUE)
 m <- adj.counts[,1]-adj.counts[,2]
 a <- adj.counts[,1]+adj.counts[,2]
-smoothScatter(x=a, y=m, xlab="A", ylab="M", main=rebin$libname[1], cex.lab=1.4, cex.axis=1.2)
+smoothScatter(x=a, y=m, xlab="A", ylab="M", main=info(rebin)$libname[1], cex.lab=1.4, cex.axis=1.2)
 abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
 @
 
@@ -633,8 +640,9 @@ Counts are then (conceptually) divided by the normalization factor, such that a 
 For example, an expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to comparison.
 
 <<>>=
-inter.counts <- rebin$counts[is.na(getDistance(rebin)),]
-normfacs <- calcNormFactors(DGEList(inter.counts, lib.size=rebin$totals))$samples$norm.factors
+inters <- asDGEList(rebin[is.na(getDistance(rebin)),])
+inters <- calcNormFactors(inters)
+normfacs <- inters$samples$norm.factors
 normfacs
 @
 
@@ -658,7 +666,7 @@ The effect of these choices will be discussed in the following section.
 Firstly, it is necessary to assemble a \code{DGEList} object for entry into \edgeR{}:
 
 <<>>=
-y <- DGEList(freqs$counts, lib.size=freqs$totals, norm.factors=normfacs)
+y <- asDGEList(freqs, norm.factors=normfacs)
 @
 
 \section{The paired-sample design}
@@ -669,7 +677,7 @@ This design accommodates library-specific effects, i.e., differences in the abso
 This avoids inflation of the dispersions due to batch effects between libraries.
 
 <<>>=
-design.paired <- model.matrix(~factor(freqs$libname) + factor(freqs$hetero))
+design.paired <- model.matrix(~factor(info(freqs)$libname) + factor(info(freqs)$hetero))
 design.paired
 @
 
@@ -685,7 +693,8 @@ plotBCV(y.paired)
 @
 
 <<label=qlpaired,eval=FALSE,echo=FALSE>>=
-result.paired <- glmQLFTest(y.paired, design.paired, robust=TRUE, plot=TRUE)
+fit.paired <- glmQLFit(y.paired, design.paired, robust=TRUE)
+plotQLDisp(fit.paired)
 @
 
 <<eval=FALSE>>=
@@ -725,7 +734,7 @@ All hetero-linker counts are treated as a single group, and all homo-linker coun
 This means that the NB and QL dispersions can be properly estimated from the non-zero homo-linker counts, even when the hetero-linker counts are all zero.
 
 <<>>=
-design.group <- model.matrix(~factor(freqs$hetero))
+design.group <- model.matrix(~factor(info(freqs)$hetero))
 design.group
 @
 
@@ -741,7 +750,8 @@ plotBCV(y.group)
 @
 
 <<label=qlgroup,eval=FALSE,echo=FALSE>>=
-result.group <- glmQLFTest(y.group, design.group, robust=TRUE, plot=TRUE)
+fit.group <- glmQLFit(y.group, design.group, robust=TRUE)
+plotQLDisp(fit.group)
 @
 
 <<eval=FALSE>>=
@@ -774,7 +784,7 @@ For the one-way layout, the coefficient of interest is that corresponding to the
 This should be specified through the \code{coef} or \code{contrast} arguments.
 
 <<>>=
-result.group <- glmQLFTest(y.group, design.group, robust=TRUE, coef=2)
+result.group <- glmQLFTest(fit.group, coef=2)
 topTags(result.group)
 @
 
@@ -810,8 +820,8 @@ In practice, all interactions should be sorted by the $p$-value and saved to fil
 This means that results can be queried in a flexible manner without needing to re-run the entire analysis, e.g., if the FDR threshold is changed.
 
 <<>>=
-ax <- getAnchor(freqs)
-tx <- getTarget(freqs)
+ax <- anchors(freqs)
+tx <- targets(freqs)
 final <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
     target.chr=seqnames(tx), target.start=start(tx), target.end=end(tx), 
     result.group$table, FDR=adj.p)
@@ -936,7 +946,7 @@ curfiles <- c("SRR372741_AA.h5", "SRR372741_BB.h5",
               "SRR372748_AA.h5", "SRR372748_BB.h5")
 actual <-countPET(curfiles, width=countwidth, filter=10)
 comp.freq <- compressMatrix(actual)
-head(comp.freq$counts)
+head(counts(comp.freq))
 @
 
 The aim is to identify interactions where the homo-linker counts for MCF7 and K562 cells are significantly different.
@@ -952,10 +962,9 @@ This is equivalent to the strategies described in Section~\ref{sec:filtering}.
 
 <<>>=
 min.gap <- getDistance(comp.freq)
-keep <- aveLogCPM(comp.freq$counts, lib.size=comp.freq$totals) > 0 &
+keep <- aveLogCPM(asDGEList(comp.freq)) > 0 &
 	(min.gap > 1 | is.na(min.gap))
-comp.freq$counts <- comp.freq$counts[keep,]
-comp.freq$pairs <- comp.freq$pairs[keep,]
+comp.freq <- comp.freq[keep,]
 summary(keep)
 @
 
@@ -967,7 +976,7 @@ Filtering beforehand is critical to ensure that the counts are large enough for 
 Of course, this is not applicable if one expects overall changes to the interaction structure between cell types.
 
 <<>>=
-y.diff <- DGEList(comp.freq$counts, lib.size=comp.freq$totals)
+y.diff <- asDGEList(comp.freq)
 y.diff <- calcNormFactors(y.diff)
 y.diff$samples
 @
@@ -982,8 +991,9 @@ The TMM method can then be applied to compute appropriate normalization factors.
 <<>>=
 binned.diff <-countPET(curfiles, width=1e7, filter=1)
 rebin.diff <- compressMatrix(binned.diff)
-inter.counts <- rebin.diff$counts[is.na(getDistance(rebin.diff)),]
-normfacs <- calcNormFactors(DGEList(inter.counts, lib.size=rebin.diff$totals))$samples$norm.factors
+inter.counts <- asDGEList(rebin.diff[is.na(getDistance(rebin.diff)),])
+inter.counts <- calcNormFactors(inter.counts)
+normfacs <- inter.counts$samples$norm.factors
 normfacs
 @
 
@@ -1022,7 +1032,9 @@ plotBCV(y.diff)
 @
 
 <<label=qldiff,eval=FALSE,echo=FALSE>>=
-result.diff <- glmQLFTest(y.diff, design.diff, robust=TRUE, plot=TRUE)
+fit.diff <- glmQLFit(y.diff, design.diff, robust=TRUE)
+plotQLDisp(fit.diff)
+result.diff <- glmQLFTest(fit.diff)
 @
 
 <<eval=FALSE>>=
@@ -1073,8 +1085,8 @@ It is a trivial matter to save these results for further perusal.
 The process of annotation and visualization will be skipped here for brevity, as it is the same as previously described.
 
 <<>>=
-ax <- getAnchor(comp.freq)
-tx <- getTarget(comp.freq)
+ax <- anchors(comp.freq)
+tx <- targets(comp.freq)
 final <- data.frame(anchor.chr=seqnames(ax), anchor.start=start(ax), anchor.end=end(ax),
     target.chr=seqnames(tx), target.start=start(tx), target.end=end(tx), 
     result.diff$table, FDR=p.adjust(result.diff$table$PValue, method="BH"))
