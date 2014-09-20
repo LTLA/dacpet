@@ -4,7 +4,7 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 # for all sliding windows (or mats, in interaction space), in preparation for further analysis.
 #
 # written by Aaron Lun
-# 15 January 2014
+# Created 15 January 2014. Lastmodified 19 September 2014.
 {
 	nlibs <- length(files)
 	left <- shift
@@ -125,8 +125,15 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 			# Collating the results.
             out<-.Call(cxx_count_chia, ptr, pulled, filter, anchor==target)
 			if (is.character(out)) { stop(out) }
-			all.anchors[[counter]] <- out[[1]]+offsets[[anchor]]
- 			all.targets[[counter]] <- out[[2]]+offsets[[target]]
+			out[[1]] <- out[[1]] + offsets[[anchor]]
+			out[[2]] <- out[[2]] + offsets[[target]]
+			if (offsets[[anchor]] >= offsets[[target]]) {
+				all.anchors[[counter]] <- out[[1]]
+ 				all.targets[[counter]] <- out[[2]]
+			} else {
+				all.anchors[[counter]] <- out[[2]]
+ 				all.targets[[counter]] <- out[[1]]
+			}
 			coldex[[counter]] <- out[[3]]+1L
 			counter <- counter + 1L
 		}
@@ -135,8 +142,9 @@ countPET <- function(files, ext=1L, shift=0L, width=5000L, spacing=width, filter
 	# Storing the output.
 	counts<-.Call(cxx_get_counts, ptr)
 	if (is.character(counts)) { stop(counts) }
-	colpairs <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
-	return(list(counts=counts[unlist(coldex),,drop=FALSE], totals=full.sizes, pairs=colpairs, region=windows, files=files))
+	return(IList(counts=counts[unlist(coldex),,drop=FALSE],  
+		info=data.frame(totals=full.sizes, files=files), anchors=unlist(all.anchors), 
+		targets=unlist(all.targets), regions=windows))
 }
 
 .forgeInterval <- function(pt, ext, spacing, left=0, right=0, maxed=NULL, is.first=TRUE) 

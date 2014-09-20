@@ -4,7 +4,7 @@ marginPET <- function(files, regions, ext=1L, restrict=NULL)
 # regions with counts above the specified threshold.
 #
 # written by Aaron Lun
-# 23 January, 2014
+# Created 23 January 2014. Last modified 19 September 2014.
 {
     nlibs<-length(files)
     if (!is.integer(ext)) { ext<-as.integer(ext) }
@@ -77,12 +77,9 @@ marginPET <- function(files, regions, ext=1L, restrict=NULL)
 	}
 
 	# Cleaning up and cashing out.
-	return(list(counts=all.margins, totals=totals, files=files))
+	temp <- 1:length(regions)
+	return(IList(counts=all.margins, info=data.frame(totals=totals, files=files),
+		anchors=temp, targets=temp, regions=regions))
 }
 
-# It's worth pointing out that the anchor/target definition is based on the 
-# inbuild chromosome sorting order (i.e., later chromosomes will be the anchor)
-# and, for pairs on the same chromosome, the sorting order of the start
-# points of each region (i.e., later start points will be the anchor).
-# This can be a bit weird if the supplied regions are not ordered, as 
-# the anchor index can then be lower than the target index.
+

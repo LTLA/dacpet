@@ -4,9 +4,20 @@ useDynLib(dacpet, .registration=TRUE, .fixes="cxx_")
 #  All functions exported other than those starting with "."
 export(splitLinkers, preparePET, mergePET,
 	stripOutwardPET, diagnosePET, extractMito,
+	IList,
 	countPET, recountPET, marginPET,  
-	compressMatrix, getDistance, getAnchor, getTarget,
+	compressMatrix, getDistance, 
 	plotChIA)
 
+# S4 classes.
+exportClasses(
+	IList
+)
+
+exportMethods(
+	anchors, targets, counts, regions, info, "[", show,
+	asDGEList
+)
+
 #  Requires the Rsamtools and GenomicRanges packages.
-import(Rsamtools,GenomicRanges,rhdf5)
+import(Rsamtools,GenomicRanges,rhdf5,methods,edgeR)

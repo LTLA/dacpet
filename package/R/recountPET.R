@@ -4,7 +4,7 @@ recountPET <- function(files, regions, ext=1L, filter=20L, restrict=NULL)
 # regions with counts above the specified threshold.
 #
 # written by Aaron Lun
-# 23 January, 2014
+# Created 23 January 2014. Last modified 19 September 2014.
 {
     nlibs<-length(files)
     if (!is.integer(ext)) { ext<-as.integer(ext) }
@@ -15,13 +15,21 @@ recountPET <- function(files, regions, ext=1L, filter=20L, restrict=NULL)
         stop("fragment length must be a non-negative integer")
     }
 	o <- GenomicRanges::order(regions)
-	sregions <- regions[o]
-	gr <- split(ranges(sregions), seqnames(sregions))
-	oridex <- split(o, seqnames(sregions))
+	regions <- regions[o]
 
-	chromosomes <- .getChrs(files)
-	chrs <- names(chromosomes)
-	my.chrs <- names(oridex)
+	# Setting up chromosome-by-chromosome data.
+	gr <- offsets <- list()
+	rv <- runValue(seqnames(regions))
+	rl <- runLength(seqnames(regions))
+	last.hit <- 0L
+	for (x in 1:length(rv)) { 
+		chr <- as.character(rv[x])
+		gr[[chr]] <- ranges(regions)[last.hit + 1:rl[x]]
+		offsets[[chr]] <- last.hit
+		last.hit <- last.hit + rl[x]
+	}
+	chrs <- names(.getChrs(files))
+	my.chrs <- names(gr)
 
     # Running through each pair of chromosomes.
     overall <- .loadIndices(files)
@@ -39,7 +47,7 @@ recountPET <- function(files, regions, ext=1L, filter=20L, restrict=NULL)
 			if (!is.null(restrict) && !(target %in% restrict)) { next }
             is.okay <- current[[target]]
 
-			# Deciding whether to skip.
+			# Deciding whether to skip counting (but we still need the totals).
 			if (! (anchor %in% my.chrs) || ! (target %in% my.chrs)) {
 				for (x in 1:length(is.okay)) { 
 					if (is.okay[x]) { totals[x] <- totals[x] + nrow(.getPairs(files[x], anchor, target)) }
@@ -76,21 +84,23 @@ recountPET <- function(files, regions, ext=1L, filter=20L, restrict=NULL)
 			combined <- .Call(cxx_aggregate_pair_counts, pulled, filter)
 			if (is.character(combined)) { stop(combined) }
 			all.counts[[ix]] <- combined[[3]]
-			all.anchors[[ix]] <- oridex[[anchor]][combined[[1]]]
- 		    all.targets[[ix]] <- oridex[[target]][combined[[2]]]
+
+			combined[[1]] <- combined[[1]] + offsets[[anchor]]
+			combined[[2]] <- combined[[2]] + offsets[[target]]
+			if (offsets[[anchor]] >= offsets[[target]]) {  
+				all.anchors[[ix]] <- combined[[1]]
+ 		   		all.targets[[ix]] <- combined[[2]]
+			} else {
+				all.anchors[[ix]] <- combined[[2]]
+ 		   		all.targets[[ix]] <- combined[[1]]
+			}
 			ix <- ix + 1L
 		}
 	}
 
 	# Cleaning up and cashing out.
 	all.counts <- do.call(rbind, all.counts)
-	all.coords <- data.frame(anchor=unlist(all.anchors), target=unlist(all.targets))
-	return(list(counts=all.counts, pairs=all.coords, totals=totals, region=regions, files=files))
+	regions$original <- o
+	return(IList(counts=all.counts, info=data.frame(totals=totals, files=files), 
+		anchors=unlist(all.anchors), targets=unlist(all.targets), regions=regions))
 }
-
-# It's worth pointing out that the anchor/target definition is based on the 
-# inbuild chromosome sorting order (i.e., later chromosomes will be the anchor)
-# and, for pairs on the same chromosome, the sorting order of the start
-# points of each region (i.e., later start points will be the anchor).
-# This can be a bit weird if the supplied regions are not ordered, as 
-# the anchor index can then be lower than the target index.
