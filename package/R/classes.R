@@ -145,7 +145,6 @@ IList <- function(counts, info=NULL, anchors, targets, regions) {
 	new("IList", counts=counts, info=info, anchor.id=anchors, target.id=targets, region=regions)
 }
 
-setGeneric("asDGEList", function(object, ...) { standardGeneric("asDGEList") })
 setMethod("asDGEList", signature("IList"), function(object, ...) {
 	DGEList(counts(object), lib.size=info(object)$totals, ...)
 })

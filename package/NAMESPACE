@@ -20,4 +20,6 @@ exportMethods(
 )
 
 #  Requires the Rsamtools and GenomicRanges packages.
-import(Rsamtools,GenomicRanges,rhdf5,methods,edgeR)
+import(Rsamtools, GenomicRanges, rhdf5, methods,
+	edgeR, csaw,
+	IRanges, S4Vectors, GenomeInfoDb)
