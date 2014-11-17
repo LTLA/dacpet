@@ -205,7 +205,7 @@ The value of \code{minq} describes the minimum mapping quality score (MAPQ) for 
 Both tags in each pair must have a MAPQ above \code{minq} for that pair to be retained in the tag file.
 A reasonably stringent value is recommended given that alignment of short tags is likely to be error-prone.
 Similarly, the \code{dedup} value specifies whether or not marked duplicates should be removed. 
-This is recommended as the chance of obtaining exactly overlapping pairs is low. 
+This is recommended as the chance of randomly obtaining pairs with the same positions in the genome-by-genome space is low. 
 Any overlaps are likely to be technical artifacts from PCR duplication during library preparation.
 The numbers of pairs with at least one poorly mapped or duplicate tag can be examined in the output:
 
@@ -223,15 +223,15 @@ out$other
 @
 
 For brevity, this processing step is only performed here for one BAM file. 
-Real analyses should run this function over a loop for all files as required.
+Real analyses should run this function over a loop for all files (and store diagnostics) as required.
 
 \section{Diagnosing ligation quality}
 
 \subsection{Making strand orientation plots}
 \label{ssec:strorient}
 Some diagnostics can be pulled out of each processed tag file using the \code{diagnosePET} function. 
-This extracts the strand information for inter-chromosomal tag pairs, i.e., those mapped to different chromosomes.  
-Each code refers to the combination of strands to which each pair is mapped, i.e., both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2}) and both reverse (\code{3}). 
+This extracts the strand information for inter-chromosomal tag pairs, i.e., those with tags mapped to different chromosomes.  
+Each code refers to the combination of strands to which the tags in each pair are mapped, i.e., both forward (\code{0}), forward-reverse (\code{1}), reverse-forward (\code{2}) and both reverse (\code{3}). 
 As you can see, these numbers are fairly balanced as ligation between different pieces of DNA can generate any combination of strands.
 
 <<>>=
@@ -240,8 +240,8 @@ diag$inter
 @
 
 The function will also collect strand and gap information for intra-chromosomal tag pairs. 
-In this case, the ``first'' tag is that which maps at a lower position on the same chromosome.
-This means that a code of \code{1} marks an inward-facing tag pair whereas a code of \code{2} marks an outward-facing tag pair. 
+In this case, the ``first'' tag in a pair is the one that maps at a lower genomic position on that chromosome.
+This means that a code of \code{1} marks an inward-facing tag pair (forward-reverse) whereas a code of \code{2} marks an outward-facing tag pair (reverse-forward). 
 The gap distance refers to the distance between tag positions on the same chromosome. 
 The distribution of gaps can then be examined for each strand orientation \citep{jin2013highres}. 
 The average distribution of codes \code{0} and \code{3} is shown as both involve alignment to the same strand.
@@ -271,9 +271,9 @@ The spike in outward-facing tag pairs is consistent with self-ligation events.
 This occurs when a DNA fragment ligates to itself to form a circle. 
 Subsequent cleavage and sequencing over the ligation junction can only generate outward-facing pairs upon alignment. 
 In contrast, inter-ligation events between DNA fragments can generate any of the strand orientation. 
-This explains the balance that is observed between the distributions at higher gap sizes.
+This results in the equality that is observed between the distributions at higher gap sizes.
 
-It's worth pointing out that no skews in strand orientation should theoretically exist for the AB library. 
+In theory, no skews in strand orientation should exist for the AB library. 
 This is because all AB pairs should be formed by inter-ligation events. 
 Nonetheless, self-ligation spikes will still be observed for the AB library.
 This is probably due to spillover from linker assignment errors. 
@@ -283,7 +283,7 @@ The majority of AB tag pairs are inter-chromosomal so the absolute number of spi
 Self-ligation events provide no information with respect to interactions between DNA fragments. 
 Moreover, they can confound the analysis by masking genuine interactions during counting. 
 Any tag pairs corresponding to self-ligation events should be removed with the \code{stripOutwardPET} function. 
-This is done by removing all pairs contributing to the spike in the plot above, i.e., outward-facing pairs at gap distances below 25 kbp.
+This is done by removing all pairs contributing to the spike in the plot above, i.e., all outward-facing pairs at gap distances below 25 kbp.
  
 <<>>=
 stripfile <- sub("\\.h5", "_strip.tsv", outcoming)
@@ -292,7 +292,7 @@ stripped
 @
 
 This will overwrite the old tag file with the stripped results. 
-Alternatively, the stripped results can be diverted to a new tag file if further quality control on the original results is desired. 
+The stripped results can be diverted to a new tag file by setting the \code{file.out} parameter, if further work on the original results is required.
 The return value of the function represents the number of tag pairs discarded in this manner. 
 This is usually a substantial proportion of all pairs in the original tag file. 
 Here, the discarded pairs are also routed into \code{stripfile} for later use.
