@@ -149,3 +149,6 @@ setMethod("asDGEList", signature("IList"), function(object, ...) {
 	DGEList(counts(object), lib.size=info(object)$totals, ...)
 })
 
+setMethod("normalize", signature("IList"), function(object, ...) {
+	normalizeCounts(counts(object), lib.sizes=info(object)$totals, ...)
+})

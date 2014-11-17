@@ -16,7 +16,7 @@ exportClasses(
 
 exportMethods(
 	anchors, targets, counts, regions, info, "[", show,
-	asDGEList
+	asDGEList, normalize
 )
 
 #  Requires the Rsamtools and GenomicRanges packages.

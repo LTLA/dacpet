@@ -23,6 +23,8 @@
 
 \alias{asDGEList}
 \alias{asDGEList,IList-method}
+\alias{normalize}
+\alias{normalize,IList-method}
 
 \title{IList class and methods}
 
@@ -114,8 +116,11 @@ In the code snippets below, \code{x} is a IList object.
 		Data for all interactions will be shown if there are no more than 10 interactions.
 	}
 	\item{}{\code{asDGEList(x, ...)}:
-		Extracts count data and totals, and returns the same data as a \code{DGEList}.
+		Extracts count data and totals, and returns it in the form of a \code{DGEList}.
 		Arguments in \code{...} are passed to the \code{\link{DGEList}} constructor.
+	}
+	\item{}{\code{normalize(x, ...)}:
+		Passes count data, totals and other arguments to \code{\link{normalizeCounts}} to compute normalization factors or offsets.
 	}
 }
 }
@@ -144,10 +149,13 @@ info(blah)
 regions(blah)
 
 asDGEList(blah)
+normalize(blah)
+head(normalize(blah, type="loess"))
 }
 
 \seealso{
 \code{\link{DGEList}},
 \code{\link{countPET}},
-\code{\link{compressMatrix}}
+\code{\link{compressMatrix}},
+\code{\link{normalizeCounts}}
 }
