@@ -143,26 +143,34 @@ Obviously, readers will have to modify the code according to their own circumsta
 \chapter{Preparing tag files}
 
 \section{Splitting tags and aligning reads}
-Raw ChIA-PET data shows up as a bunch of 36 bp read pairs, where each read has a linker and tag component. 
-The linker sequence must be identified as either A or B for downstream analysis.
+As its name suggests, the ChIA-PET procedure generates paired-end sequencing data.
+Each read in a pair has a tag and linker component as the $5'$ and $3'$ segment, respectively.
+The linker component for each read must be identified as either A or B, based on the known linker sequence.
 Then, it must be removed so that the tag can be aligned to the reference genome.
-Removal can be achieved with the \code{splitLinkers} function, which takes two FastQ files of tag-linker pairs and generates several paired FastQ files.
+Removal is achieved with the \code{splitLinkers} function, which takes two FastQ files of tag-linker pairs and generates several paired FastQ files.
 Each pair of files contains the tag pairs corresponding to each linker combination, i.e., AA, BB, AB or other/unknown.
 
 <<eval=FALSE>>=
 require(dacpet)
-splitLinkers("SRR372741_1.fastq", "SRR372741_2.fastq", 
-    "GTTGGATAAGATATCG", "GTTGGAATGTATATCG", prefix="SRR372741")
+splitLinkers(fastq1="SRR372741_1.fastq", fastq2="SRR372741_2.fastq", 
+    linkerA="GTTGGATAAGATATCG", linkerB="GTTGGAATGTATATCG")
 @
 
 <<echo=FALSE>>=
 require(dacpet)
 @
 
+In older ChIA-PET datasets, reads were 36 bp long to accommodate a 20 bp tag and a 16 bp linker.
+The \code{splitLinkers} function will automatically assume that the last 16 bp of the read represents the linker.
+In newer experiments, longer read lengths are typically used.
+The read position at which the linker starts must then be specified manually with the \code{start} parameter. 
+This should be set to 20 - 21 bp if the restriction enzyme used is \textit{Mme}I.
+
 The alignment itself can be performed with an appropriate aligner like \textsf{Bowtie2} \citep{langmead2012bowtie}.
-One should choose a mapping program that can handle 20 bp reads.
-Duplicate marking with the \textsf{MarkDuplicates} tool from the Picard suite is also recommended.
-The ultimate aim is to produce a name-sorted BAM file for each linker combination in each library, i.e., 3 BAM files for each incoming ChIA-PET library. 
+Users should choose a mapping program that can handle 20 bp tags.
+This should also be done in a manner that does not enforce similar mapping locations for paired tags, as each pair represents an interaction between distinct loci.
+Duplicate marking with the \textsf{MarkDuplicates} tool from the Picard suite (\url{http://broadinstitute.github.io/picard}) is recommended.
+The ultimate aim is to produce a name-sorted BAM file for each linker combination in each library, i.e., 3 BAM files.
 For the MCF7 dataset, this results in 6 files in total after processing and mapping (ignoring those with unknown linkers):
 
 <<>>=
@@ -170,8 +178,8 @@ bamfiles <- c("SRR372741_AA.bam", "SRR372741_AB.bam", "SRR372741_BB.bam",
         "SRR372742_AA.bam", "SRR372742_AB.bam", "SRR372742_BB.bam")
 @
 
-Note that the three files named \code{SRR372741\_*} correspond to a single library, as do those named \code{SRR372742\_*}. 
-The two libraries represent different biological replicates according to the entry on NCBI GEO (accession number GSE33664).
+Note that the three BAM files named \code{SRR372741\_*} correspond to a single ChIA-PET library, as do those named \code{SRR372742\_*}. 
+These two libraries represent biological replicates, according to the entry in the NCBI Gene Expression Omnibus (accession number GSE33664).
 They will be used later to assess the reproducibility of the identified interactions.
 
 \section{Converting BAM files to tag files}
