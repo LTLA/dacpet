@@ -37,7 +37,7 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\title{\pkgname{}: Differential analysis of ChIA-PET data \\ \vspace{0.2in} User's Guide}
+\title{\pkgname{}: \textit{De novo} analysis of ChIA-PET data \\ \vspace{0.2in} User's Guide}
 \author{Aaron Lun}
 
 % Set to change date for document, not compile date.
@@ -80,17 +80,17 @@ dir.create("plots-ug")
 
 \chapter{Introduction}
 \section{Scope}
-This document describes the use of the \pkgname{} package to analyze CHIA-PET data.
-In particular, specific interactions are distinguished from non-specific ligation events by comparing the homo-linker and hetero-linker counts for each interaction. 
-Analyses can also be performed to identify interactions with significant changes in intensity between biological conditions.
+This document describes the use of the \pkgname{} package for \textit{de novo} identification of protein-mediated interactions from CHIA-PET data.
+In particular, specific interactions are distinguished from non-specific ligation events by comparing the homo-linker and hetero-linker counts.
+Analyses can also be performed to identify differential interactions between biological conditions.
 This is done in a statistically rigorous manner using the methods in the \edgeR{} package \citep{edgeR}. 
-Knowledge of \edgeR{} is useful but is not necessary for reading.
+Knowledge of \edgeR{} is useful, but not necessary.
 
 \section{How to get help}
 Most questions about individual functions should be answered by the documentation.  
 For example, if you want to know more about \code{preparePET}, you can bring up the documentation by typing \code{?preparePET} or \code{help(preparePET)} at the \R{} prompt. 
 If that doesn't help, reading this guide or contacting one of the authors is probably the best approach.
-Thoughtful suggestions for improvements are occasionally appreciated.
+Bug reports and thoughtful suggestions for improvements are occasionally appreciated.
 
 \section{Quick start}
 <<echo=FALSE,results=hide>>=
@@ -120,7 +120,6 @@ freqs <- freqs[ab > -1,]
 @
 \item normalizing the linker combinations
 <<>>=
-require(csaw)
 binned <-countPET(curfiles, width=1e7, filter=1)
 rebin <- compressMatrix(binned)
 inters <- rebin[is.na(getDistance(rebin)),]
@@ -138,7 +137,7 @@ fit <- glmQLFit(y, design, robust=TRUE)
 result <- glmQLFTest(fit)
 @
 \end{enumerate}
-In the various examples for this guide, data will be used from an experiment targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. 
+In the various examples for this guide, data will be used from a ChIA-PET experiment targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. 
 Obviously, readers will have to modify the code according to their own circumstances.
 
 \chapter{Preparing tag files}
