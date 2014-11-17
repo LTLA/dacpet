@@ -93,15 +93,50 @@ If that doesn't help, reading this guide or contacting one of the authors is pro
 Thoughtful suggestions for improvements are occasionally appreciated.
 
 \section{Quick start}
-As a quick demonstration of the analysis is largely impossible, this part will just be left empty. 
-Suffice to say that there are several components of the pipeline that shall be discussed:
+<<echo=FALSE,results=hide>>=
+curfiles <- c("SRR372741_AA.h5", "SRR372741_AB.h5", "SRR372741_BB.h5",
+            "SRR372742_AA.h5", "SRR372742_AB.h5", "SRR372742_BB.h5")
+@
+
+The analysis of ChIA-PET data with \pkgname{} involves a number of steps.
+For simplicity, assume that the BAM files have already been processed to tag files in \code{curfiles}.
+Also assume that self-ligation events have been removed.
+The code itself can then be written as:
 \begin{enumerate}
 \item converting BAM files to tag files
 \item removing self-ligation events
 \item counting tag pairs for each interaction
+<<>>=
+require(dacpet)
+countwidth <- 5000
+data <-countPET(curfiles, width=countwidth, filter=10)
+freqs <- compressMatrix(data)
+@
+\item filtering out low-abundance interactions
+<<>>=
+require(edgeR)
+ab <- aveLogCPM(asDGEList(freqs))
+freqs <- freqs[ab > -1,]
+@
 \item normalizing the linker combinations
+<<>>=
+require(csaw)
+binned <-countPET(curfiles, width=1e7, filter=1)
+rebin <- compressMatrix(binned)
+inters <- rebin[is.na(getDistance(rebin)),]
+normfacs <- normalizeCounts(counts(inters), lib.size=info(inters)$totals)
+@
 \item modelling biological variability
+<<>>=
+y <- asDGEList(freqs, norm.factors=normfacs)
+design <- model.matrix(~factor(info(freqs)$hetero))
+y <- estimateDisp(y, design)
+fit <- glmQLFit(y, design, robust=TRUE)
+@
 \item testing for significant differences between homo-/hetero-linker counts
+<<>>=
+result <- glmQLFTest(fit)
+@
 \end{enumerate}
 In the various examples for this guide, data will be used from an experiment targeting RNA polymerase II in MCF7 cells \citep{li2012extensive}. 
 Obviously, readers will have to modify the code according to their own circumstances.
@@ -642,9 +677,8 @@ Counts are then (conceptually) divided by the normalization factor, such that a 
 For example, an expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to comparison.
 
 <<>>=
-inters <- asDGEList(rebin[is.na(getDistance(rebin)),])
-inters <- calcNormFactors(inters)
-normfacs <- inters$samples$norm.factors
+inters <- rebin[is.na(getDistance(rebin)),]
+normfacs <- normalizeCounts(counts(inters), lib.size=info(inters)$totals)
 normfacs
 @
 
