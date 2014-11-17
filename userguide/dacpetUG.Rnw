@@ -481,10 +481,10 @@ Removal of these interactions can improve the sensitivity of the analysis by red
 Filtering on the average count (as computed by the aveLogCPM function in the edgeR package \citep{mccarthy2012glm}) is recommended for statistical analyses using a negative binomial (NB) model.
 
 <<>>=
+require(csaw)
 require(edgeR)
-pc <- 1e-3
-a.cpm <- aveLogCPM(asDGEList(freqs), prior.count=pc)
-summary(a.cpm)
+ab <- aveLogCPM(asDGEList(freqs))
+summary(ab)
 @
 
 The average count is useful as it is approximately independent of the $p$-value for any downstream tests \citep{lun2014denovo}.
@@ -493,13 +493,14 @@ Of course, some caution is required lest all the interesting interactions be rem
 In this case, a relatively mild threshold is used given that the bulk of filtering has already been performed with \code{filter} during count loading.
 
 <<>>=
-keep <- a.cpm > -1
+keep <- ab > -1
 freqs <- freqs[keep,]
 summary(keep)
 @
 
-A more educated choice of filter threshold can be obtained by identifying putative genuine interactions as those that have say, a \code{X}-fold higher average abundance than a non-specific interaction. If one assumes that most of the interaction space is filled with non-specific contacts, it is simple to calculate the threshold based on the abundance of those contacts. 
-Note that larger bins are required to count non-specific contacts due to the sparsity in the interaction space. 
+A more educated choice of filter threshold can be obtained by identifying putative genuine interactions as those that have, e.g., higher average abundance than a non-specific interaction. 
+If one assumes that most of the interaction space is filled with non-specific contacts, it is simple to calculate the threshold based on the abundance of those contacts. 
+Note that larger bins are required to count non-specific contacts due to the sparsity of the interaction space. 
 
 <<>>=
 binsize <- 1e6
@@ -507,16 +508,14 @@ binned <-countPET(curfiles, width=binsize, filter=1)
 rebin <- compressMatrix(binned, hetero=is.het, libname=libname)
 @
 
-The abundance of larger bin pairs can be calculated and compared to the values in \code{a.cpm}.
+The abundance of larger bin pairs can be calculated and compared to the values in \code{ab}.
 Some adjustments are necessary to account for the differences in the \textit{areas} for tag pair collection with each bin size.
-The median of the adjusted values is then increased by \code{X} and used as the threshold.
+The median of the adjusted values is used as the estimate for the rate of non-specific ligation.
+Here, each smaller bin pair is only retained if its abundance is 5 times higher than the non-specific estimate.
 
 <<>>=
-adjusted <- (binsize/countwidth)^2
-threshold <- median(aveLogCPM(asDGEList(rebin), prior.count=pc*adjusted))
-threshold <- threshold - log2(adjusted)
-X <- 5000
-keep <- a.cpm >= threshold + log2(X) 
+threshold <- median(scaledAverage(asDGEList(rebin), scale=(binsize/countwidth)^2))
+keep <- ab >= threshold + log2(5) 
 summary(keep)
 @
 
@@ -590,9 +589,10 @@ chisq.test(lib.1, p=expected)
 \subsection{Checking counts across the interaction space}
 The mitochondrial results can be confirmed with counts from the rest of the dataset. 
 Tag pairs are counted into pairs of 10 Mbp bins as described before. 
-The assumption here is that most bin pairs contain only non-specific ligation events, i.e., most contacts in the interaction space are not specific. 
-This is generally reasonable as contacts would not be expected between all pairs of binding sites. 
-Again, large bins are necessary to count rare non-specific events.
+The assumption here is that most inter-chromosomal bin pairs only contain non-specific ligation events.
+This is generally reasonable as chromosomes are organized into self-contained territories within the nucleus.
+This sterically limits the potential contacts between binding sites on different chromosomes.
+Again, large bins are necessary to count these rare non-specific events.
 
 <<>>=
 binned <-countPET(curfiles, width=1e7, filter=1)
@@ -603,15 +603,17 @@ head(counts(rebin))
 The M-value for each interaction is defined as the log-ratio of homo- to hetero-linker counts. 
 This is used to construct a MA plot as shown below.  
 If non-specific ligation is random, the expected M-value under the random ligation model should be observed (red line). 
-However, the bulk of interactions have a substantially higher M-value. 
-This is consistent with the above-expected homo-linker counts for the nuclear-mitochondrial ``interactions''. 
+However, the bulk of interactions have substantially higher M-values. 
+This is consistent with the above-expected homo-linker counts for the nuclear-mitochondrial ``interactions''.
+That the inter-chromosomal M-values are generally equal to or less than the nuclear-mitochondrial M-values also suggests that most inter-chromosomal interactions are non-specific.
 
 <<eval=FALSE,label=plotma>>=
 adj.counts <- cpm(asDGEList(rebin), log=TRUE)
 m <- adj.counts[,1]-adj.counts[,2]
 a <- adj.counts[,1]+adj.counts[,2]
 smoothScatter(x=a, y=m, xlab="A", ylab="M", main=info(rebin)$libname[1], cex.lab=1.4, cex.axis=1.2)
-abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
+has.mito <- as.logical(seqnames(anchors(rebin)) == "chrM" | seqnames(targets(rebin)) == "chrM")
+points(a[has.mito], m[has.mito], pch=16, cex=0.5, col="red")
 @
 
 \begin{center}
