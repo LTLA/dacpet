@@ -826,8 +826,8 @@ Oh well.
 \chapter{Testing for significant interactions}
 
 \section{Using the quasi-likelihood F-test}
-The \code{glmQLFTest} function also performs the F-test for each interaction so a new function call is not required. 
-Users should, however, make sure that they are specifying the contrast matrix correctly. 
+The \code{glmQLFTest} function performs a QL F-test for each interaction, to identify those with significant differences between homo- and hetero-linker counts.
+Users should make sure that they are specifying the contrast correctly (see the edgeR user's guide for more details).
 For the one-way layout, the coefficient of interest is that corresponding to the homo-/hetero-linker fold change. 
 This should be specified through the \code{coef} or \code{contrast} arguments.
 
@@ -837,25 +837,25 @@ topTags(result.group)
 @
 
 Recall that the null hypothesis is that the (normalized) hetero-linker counts are the same as the homo-linker counts. 
-The computed $p$-value represents the evidence against the null for each interaction. 
-The log-fold change represents the relative increase of the hetero-linker count over the homo-linker count.
+The computed $p$-value represents the evidence against this null for each interaction. 
+The log-fold change represents that of the hetero-linker count over the homo-linker count.
 In this case, they are negative for all interactions. 
-This corresponds to an increase in the homo-linker count and is consistent with the presence of specific interactions.
+This corresponds to more homo-linker counts and is consistent with the presence of specific interactions.
 
 <<>>=
 summary(result.group$table$logFC)
 @
 
-You may also be wondering why we are not using the likelihood ratio test (LRT).
-Indeed, the LRT is the more obvious test for inferences with GLMs. 
-However, the QL F-test is preferred as it accounts for the variability and uncertainty of the QL dispersion estimates \citep{lund2012ql}. 
+Discerning users may also be wondering why we are not using the likelihood ratio test (LRT).
+Indeed, the LRT is the more obvious test for hypothesis testing in the GLM framework. 
+However, the QL F-test is preferred here as it accounts for the variability and uncertainty of the QL dispersion estimates \citep{lund2012ql}. 
 This means that it can maintain type I error control in the presence of heteroskedasticity whereas the LRT does not.
 
 \section{Multiplicity correction and the FDR}
-Correction for multiple tests is performed by controlling the false discovery rate (FDR) using the Benjamini-Hochberg  method \citep{benjamini1995fdr}. 
+Correction for multiple tests is performed by controlling the false discovery rate (FDR), using the method described by \cite{benjamini1995fdr}. 
 In this case, the FDR refers to the proportion of detected interactions that are false positives. 
-Control of the FDR is often more appropriate than control of the family-wise error rate (i.e., probability of one or more false rejections).
-This is because the former provides a more appropriate compromise between specificity and power in genomic analyses.
+Control of the FDR is often more appropriate than control of the family-wise error rate (i.e., probability of one or more false rejections across all interactions).
+This is because the former provides a more appropriate compromise between specificity and power in genome-wide analyses.
 
 <<>>=
 adj.p <- p.adjust(result.group$table$PValue, method="BH")
@@ -878,12 +878,12 @@ write.table(final[o,], file="results.tsv", sep="\t", quote=FALSE, row.names=FALS
 @
 
 Note that the interactions of interest are those where the homo-linker count is greater than the hetero-linker count.
-Power can be improved by filtering out all bin pairs with an inappropriate log-fold change, prior to applying the BH method.
-This removes the uninteresting tests and reduces the severity of the FDR correction.
+Power can be improved by filtering out all bin pairs with an inappropriate sign for the log-fold change, prior to applying the BH method.
+This removes uninteresting tests and reduces the severity of the correction.
 That said, filtering has no effect in this particular dataset as there are no bin pairs with a positive log-fold change. 
 
 \section{Visualization with plaid plots}
-It comes a time that some visualization of interesting results is necessary.
+There comes a time that some visualization of interesting results is desirable.
 This can be performed using the \code{plotChIA} function, which constructs a plaid plot of the interaction space \citep{lieberman2009hic}. 
 Briefly, each axis is a chromosome segment. 
 The box represents an interaction between the corresponding points on each axis. 
@@ -913,8 +913,8 @@ abline(0, 1, lty=2)
 <<chia1bb>>
 @
 
-Expansion of the plot boundaries is often desirable. 
-This ensures that the context of the interaction can be determined by examining the features in the surrounding interaction space. 
+Expansion of the plot boundaries is recommended.
+This shows the context of the interaction by examining the features in the surrounding interaction space. 
 It is also possible to tune the width of the boxes through a parameter that is, rather unsurprisingly, named \code{width}.
 The dotted line represents the diagonal around which the plot is symmetric. 
 The actual interaction occurs at the center of the plot and is marked by a rectangle in the first plot.
