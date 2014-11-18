@@ -737,9 +737,9 @@ plotBCV(y.paired)
 
 <<label=qlpaired,eval=FALSE,echo=FALSE>>=
 fit.paired <- glmQLFit(y.paired, design.paired, robust=TRUE)
-plotQLDisp(fit.paired)
-is.zero <- fit$df.residual.zeros==0L
-points(fit.paired$AveLogCPM[is.zero], 0, pch=4)
+plotQLDisp(fit.paired, ylim=c(0, 1.5))
+is.zero <- fit.paired$df.residual.zeros==0
+points(fit.paired$AveLogCPM[is.zero], fit.paired$deviance[is.zero], pch=4)
 @
 
 <<eval=FALSE>>=
@@ -981,10 +981,10 @@ Other protein targets are likely to have different profiles.
 \chapter{Repeating with differential analyses}
 
 \section{Loading the homo-linker counts}
-The previous analysis detects significantly specific interactions by comparing the homo-linker counts with the hetero-linker counts within a single condition.
+The previous analysis detects significantly specific interactions by comparing the homo- and hetero-linker counts within a single condition.
 True differential analyses involve comparison of counts between libraries for different conditions.
 This can be more useful as differential interactions are more likely to be relevant to the biological difference of interest.
-To demonstrate, data will be loadded from a ChIA-PET experiment targeting RNA polymerase II and generated from MCF7 and K562 cells \citep{li2012extensive}. 
+To demonstrate, data will be loaded from a ChIA-PET experiment targeting RNA polymerase II in both MCF7 and K562 cells \citep{li2012extensive}. 
 A bin counting strategy is used here to extract the homo-linker counts in each library.
 
 <<>>=
@@ -1006,12 +1006,11 @@ This is analogous to the discussion about paired-sample and one-way designs in S
 \section{Filtering on abundance and distance}
 Filtering is performed to remove low-abundance interactions for which detection power will always be low.
 Local interactions are also removed as they provide no information with respect to chromatin organization.
-This is equivalent to the strategies described in Section~\ref{sec:filtering}.
+This is equivalent to the methods in Section~\ref{sec:filtering}.
 
 <<>>=
 min.gap <- getDistance(comp.freq)
-keep <- aveLogCPM(asDGEList(comp.freq)) > 0 &
-	(min.gap > 1 | is.na(min.gap))
+keep <- aveLogCPM(asDGEList(comp.freq)) > 0 & (min.gap > 1 | is.na(min.gap))
 comp.freq <- comp.freq[keep,]
 summary(keep)
 @
@@ -1020,7 +1019,7 @@ summary(keep)
 Some normalization is required to correct for systematic biases prior to hypothesis testing.
 One approach is to assume that most interactions are constant between MCF7 and K562 cells.
 This means that the TMM method can be applied directly to the counts for the interactions.
-Filtering beforehand is critical to ensure that the counts are large enough for sensible normalization on the M-values (i.e., transformed fold changes).
+Prior filtering is critical to ensure that the counts are large enough for sensible normalization on the M-values (i.e., transformed fold changes).
 Of course, this is not applicable if one expects overall changes to the interaction structure between cell types.
 
 <<>>=
@@ -1029,9 +1028,9 @@ y.diff <- calcNormFactors(y.diff)
 y.diff$samples
 @
 
-Alternatively, an approach analogous to homo-/hetero-linker normalization (see Section~\ref{sec:norm}) can be used.
-Genuine biological differences are not expected between groups for non-specific interactions.
-Any differences in the counts for these interactions are attributed to composition biases and other technical effects.
+Alternatively, an approach analogous to that in Section~\ref{sec:norm} can be used.
+No differences are expected between groups for non-specific interactions.
+Any differences in these counts must be driven by composition biases and other technical effects.
 To remove such biases, the majority of inter-chromosomal contacts are assumed to be non-specific.
 Reads are re-counted using large bins to provide sufficiently large counts for these weak contacts.
 The TMM method can then be applied to compute appropriate normalization factors.
@@ -1045,10 +1044,10 @@ normfacs <- inter.counts$samples$norm.factors
 normfacs
 @
 
-The ideal approach depends on whether any consistent increases or decreases in interaction intensity are assumed to be genuine.
-If so, the second approach should be used as it only removes differences for non-specific interactions.
-This preserves any differences in the high-abundance specific interactions.
-Otherwise, these differences are technical artifacts and should be removed with the first approach.
+The ideal approach depends on whether systematic changes in interaction intensity are assumed to be genuine.
+If so, the second approach should be used as it only removes differences among the non-specific contacts.
+This preserves any overall differences between conditions for the specific interactions.
+Otherwise, if the differences are not expected, they are probably technical artifacts and should be removed with the first approach.
 
 For this particular dataset, the second approach is chosen.
 Large-scale changes are to be expected when comparing two different immortalized cell lines.
@@ -1062,7 +1061,7 @@ y.diff$samples$norm.factors <- normfacs
 \section{Running through the statistical analysis}
 As previously mentioned, users should perform the statistical analysis with a one-way layout.
 Counts for each cell type are treated as replicates of a group.
-The ensuing analysis will compare counts between the two cell types for each interaction.
+The ensuing analysis will compare counts between the cell types for each interaction.
 The null hypothesis is that the second coefficient is zero, i.e., the normalized mean counts for each group are identical.
 
 <<>>=
@@ -1070,8 +1069,8 @@ design.diff <- model.matrix(~factor(c("mcf7", "mcf7", "k562", "k562")))
 design.diff
 @
 
-Dispersion estimation and hypothesis testing can be performed as previously described, using the QL framework from the \edgeR{} package.
-For the simple one-way layout described above, the contrast does not need to be specified as the last coefficient will be tested in \code{glmQLFTest}.
+Dispersion estimation and hypothesis testing can be performed as previously described, using the QL framework in the \edgeR{} package.
+For the one-way layout, the contrast does not need to be specified as the last coefficient will be tested in \code{glmQLFTest}.
 Analyses with multiple groups should always provide an argument to \code{coef} or \code{contrasts} to avoid confusion.
 
 <<label=bcvdiff,eval=FALSE,echo=FALSE>>=
@@ -1101,29 +1100,31 @@ result.diff <- glmQLFTest(fit.diff)
 \end{center}
 \setkeys{Gin}{width=0.8\textwidth}
 
-For completeness, if hetero-linker counts are sufficiently high, it may be possible to set up a paired-sample design.
-In such a design, each library forms a homo-/hetero-linker pair, much like that described in Section~\ref{sec:paireddesign}.
-All replicates in each group would have the same homo-/hetero-linker fold change.
-The null hypothesis would then state that the fold change is equal between groups.
-
-<<>>=
-libname <- factor(c(1, 1, 2, 2, 3, 3, 4, 4))
-combo <- factor(c("Ahom", "het", "Ahom", "het", "Bhom", "het", "Bhom", "het"))
-design.diff2 <- model.matrix(~libname + combo)
-design.diff2
-@
-
-The corresponding contrast would define the null as \code{groupBhom = 0} to equalize the homo-/hetero-linker fold change between groups.
-This should avoid detection of any spurious changes in the homo-linker counts that are driven by non-specific ligation.
-For example, an increase in all \code{Bhom} over \code{Ahom} will not be detected if there is an increase in the corresponding hetero-linker counts.
-Of course, this is mostly academic given that hetero-linker counts are usually too low for practical use.
+%For completeness, if hetero-linker counts are sufficiently high, it may be possible to set up a paired-sample design.
+%Each library forms a homo-/hetero-linker pair, much like that described in Section~\ref{sec:paireddesign}.
+%All replicates in each group would have the same homo-/hetero-linker fold change.
+%The null hypothesis would then state that the fold change is equal between groups.
+%
+%<<>>=
+%libname <- factor(c(1, 1, 2, 2, 3, 3, 4, 4))
+%combo <- factor(c("Ahom", "het", "Ahom", "het", "Bhom", "het", "Bhom", "het"))
+%design.diff2 <- model.matrix(~libname + combo)
+%design.diff2
+%@
+%
+%The corresponding contrast would define the null as \code{groupBhom = 0} to equalize the homo-/hetero-linker fold change between groups.
+%This should avoid detection of any spurious changes in the homo-linker counts that are driven by non-specific ligation.
+%For example, an increase in all \code{Bhom} over \code{Ahom} will not be detected if there is an increase in the corresponding hetero-linker counts.
+%Of course, this is mostly academic given that hetero-linker counts are usually too low for practical use.
+%
+%% It also mightn't be a good idea as you'd fail to detect any differences if both hetero-linker counts were zero, which is likely, even if you did have high counts.
 
 \section{Examination of the results}
-A summary of the results can be obtained with a little work.
-The non-zero codes indicate the number of interactions that are significantly different at a FDR threshold of 5\%.
-The negative code indicates that the interaction is stronger in the K562 cells, whereas a positive code indicates that it is strong in the MCF7 cells.
+A summary of the results can then be obtained.
+Non-zero codes indicate the number of interactions that are significantly different at a FDR threshold of 5\%.
+A negative code indicates that the interaction is stronger in the K562 cells, whereas a positive code indicates that it is strong in the MCF7 cells.
 Of course, one must be cautious when interpreting results from immortalized lines.
-Any changes in interaction intensities may be driven by genomic rearrangements.
+Any changes may be driven by genomic rearrangements.
 
 <<>>=
 summary(decideTestsDGE(result.diff))
