@@ -572,18 +572,17 @@ summary(keep)
 
 \section{Motivation}
 Some normalization is necessary prior to making comparisons between homo- and hetero-linker counts. 
-This accounts for biases introduced by non-equal proportions of each linker as well as non-random ligation. 
-Failure to normalize for these effects will result in incorrect conclusions. 
+This accounts for biases introduced by non-equal proportions of the two linkers, as well as any effects of non-random ligation. 
+Failure to normalize will lead to incorrect conclusions. 
 In particular, the nominal expected ratio of homo- to hetero-linker counts is 1:1 in a na\"ive comparison. 
 The true expected ratio is often higher for a number of reasons (see below), so testing against the nominal ratio will result in many false positives.
 
 \section{Diagnosing random ligation}
 
 \subsection{Using the Hardy-Weinberg law for normalization}
-Assume that ligation between DNA fragments is random. 
-Each DNA fragment can be treated as a diploid individual where each end represents an allele. 
-Random ligation is equivalent to random mating between individuals. Now
-, assume that the proportions of DNA fragments attached to linker A and B are $a$ and $b=1-a$ respectively. 
+Each DNA fragment can be treated as a ``diploid individual'', such that each end represents an ``allele''. 
+Random ligation between ends of DNA fragments is equivalent to random mating between individuals. 
+Now, assume that the proportions of DNA fragments attached to linker A and B are $a$ and $b=1-a$, respectively. 
 Under the Hardy-Weinberg law, this means that the the proportion of AA, AB and BB would be $a^2$, $2ab$ and $b^2$, respectively.
 
 This result is useful as it allows normalization to remove the effects of non-equal A and B proportions, i.e., $a\ne b$. 
@@ -596,13 +595,14 @@ This problem can be avoided with normalization.
 The value of $a$ can be empirically determined from the proportion of tags that were attached to linker A. 
 The expected proportions for each linker can then be calculated based on the Hardy-Weinberg law. 
 These proportions are easily transformed into an expected ratio for the homo- and hetero-linker counts. 
-Alternatively, normalization can be performed to transform the expected ratio into a simple 1:1 comparison.
+Alternatively, normalization can be performed to coerce the expected ratio to a standard 1:1 setup.
 In the example above, the expected ratio is 5:4. 
-One could then normalize the data by dividing the homo-linker counts by 1.25 prior to any comparison.
+One could then normalize the data by dividing the homo-linker counts by 1.25 prior to any hypothesis testing.
 
 \subsection{Checking mitochondrial counts}
-The accuracy of the random ligation model can be assessed for each dataset by using \code{extractMito} to count tag pairs mapped between the nuclear and mitochondrial chromosomes.
-The assumption here is that the mitochondrial genome does not interact with the nuclear chromosomes. 
+The accuracy of the random ligation model can be assessed with \code{extractMito}.
+This counts the tag pairs mapped between the nuclear and mitochondrial chromosomes for each tag file.
+The assumption here is that the mitochondrial genome does not interact with nuclear chromosomes. 
 This is fairly reasonable given that they belong to separate organelles. 
 Thus, any counts observed here are attributable to non-specific (and presumably random) ligation.
 
@@ -612,7 +612,7 @@ mitocounts
 @
 
 It is fairly obvious that these counts do not follow the predicted Hardy-Weinberg proportions. 
-Any pedants out there can also go through the motions with a Pearson's chi-squared test to confirm this result. 
+This can be confirmed by using Pearson's chi-squared test.
 So, does this correspond to some fascinating new biology involving inter-organelle interactions? 
 Well, probably not. 
 It just means that non-specific ligation is not necessarily random.
@@ -629,8 +629,8 @@ chisq.test(lib.1, p=expected)
 The mitochondrial results can be confirmed with counts from the rest of the dataset. 
 Tag pairs are counted into pairs of 10 Mbp bins as described before. 
 The assumption here is that most inter-chromosomal bin pairs only contain non-specific ligation events.
-This is generally reasonable as chromosomes are organized into self-contained territories within the nucleus.
-This sterically limits the potential contacts between binding sites on different chromosomes.
+This is generally reasonable as chromosomes are organized into self-contained territories within the nucleus \citep{bickmore2013spatial}.
+This sterically limits the potential contacts between loci on different chromosomes.
 Again, large bins are necessary to count these rare non-specific events.
 
 <<>>=
@@ -644,15 +644,16 @@ This is used to construct a MA plot as shown below.
 If non-specific ligation is random, the expected M-value under the random ligation model should be observed (red line). 
 However, the bulk of interactions have substantially higher M-values. 
 This is consistent with the above-expected homo-linker counts for the nuclear-mitochondrial ``interactions''.
-That the inter-chromosomal M-values are generally equal to or less than the nuclear-mitochondrial M-values also suggests that most inter-chromosomal interactions are non-specific.
+That the inter-chromosomal M-values are generally equal to or less than the nuclear-mitochondrial M-values (crosses) also suggests that most inter-chromosomal contacts are non-specific.
 
 <<eval=FALSE,label=plotma>>=
 adj.counts <- cpm(asDGEList(rebin), log=TRUE)
 m <- adj.counts[,1]-adj.counts[,2]
 a <- adj.counts[,1]+adj.counts[,2]
 smoothScatter(x=a, y=m, xlab="A", ylab="M", main=info(rebin)$libname[1], cex.lab=1.4, cex.axis=1.2)
+abline(h=log2((expected[1]+expected[3])/expected[2]), col="red")
 has.mito <- as.logical(seqnames(anchors(rebin)) == "chrM" | seqnames(targets(rebin)) == "chrM")
-points(a[has.mito], m[has.mito], pch=16, cex=0.5, col="red")
+points(a[has.mito], m[has.mito], pch=4, cex=0.8)
 @
 
 \begin{center}
@@ -665,20 +666,21 @@ This result supports the notion that non-specific ligation is not equivalent to 
 At the very least, non-randomness means that the random ligation model cannot be used for normalization. 
 At worst, the ligation may be so non-random that there are no hetero-linker counts for any meaningful comparison. 
 Note that different datasets may experience differing violations of the randomness assumption.
-Making diagnostic plots like those shown above is recommended for routine quality control.
+Making diagnostic plots like the one shown above is recommended for routine quality control.
 
 \section{Normalizing for empirical effects}
 \label{sec:norm}
-Normalization must account for non-equal linker proportions and non-random ligation. 
-This can be done empirically by assuming that most interactions are non-specific. 
-This means that the average M-value for most interactions can be used to define the expected homo-/hetero-linker ratio under the non-specific hypothesis. 
-For example, if most interactions have an M-value close to 2, one would expect a homo-/hetero-linker ratio of around 4:1. 
+Normalization must account for both non-equal linker proportions and non-random ligation. 
+This can be done empirically by assuming, again, that most inter-chromosomal interactions are non-specific. 
+This means that the average M-value for these interactions can be used to define the expected homo-/hetero-linker ratio under the null hypothesis of non-specificity.
+In the MA plot above, most inter-chromosomal M-values are close to 2.
+One would then expect a homo-/hetero-linker count ratio of around 4:1 for a non-specific interaction. 
 
-Normalization can then be performed to scale the counts according to the expected ratio. 
-Specifically, the binned homo-/hetero-linker counts are passed into the trimmed mean of M-values (TMM) procedure \citep{oshlack2010tmm}. 
-This  returns a normalization factor for each set of counts in each library. 
-Counts are then (conceptually) divided by the normalization factor, such that a direct comparison can be performed between the normalized counts. 
-For example, an expected 4:1 ratio would involve dividing the homo-linker counts by 4 prior to comparison.
+Normalization can then be performed according to the expected ratio. 
+Counts for inter-chromosomal bin pairs are passed to the trimmed mean of M-values (TMM) procedure \citep{oshlack2010tmm}. 
+This returns a normalization factor for each homo-/hetero-linker column in each library. 
+Counts are then (conceptually) divided by the normalization factor, and a comparison is directly performed between normalized counts. 
+For example, an expected ratio of 4:1 would be normalized by dividing the homo-linker counts by 4.
 
 <<>>=
 inters <- rebin[is.na(getDistance(rebin)),]
@@ -688,7 +690,9 @@ normfacs
 
 Note that only inter-chromosomal interactions are used in the TMM procedure. 
 This weakens the assumption of a non-specific majority as genuine interactions between chromosomes are rarer than those within chromosomes. 
-In the MA plot above, all inter-chromosomal interactions lie within the main bulk of M-values at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at M-values of $\sim$7.
+In the MA plot above, all inter-chromosomal interactions lie within the main bulk of M-values at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at $\sim$7.
+This is consistent with the specificity of the latter.
+
 
 \chapter{Assessing biological variability}
 
