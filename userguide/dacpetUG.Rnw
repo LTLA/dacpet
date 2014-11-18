@@ -984,8 +984,8 @@ Other protein targets are likely to have different profiles.
 The previous analysis detects significantly specific interactions by comparing the homo- and hetero-linker counts within a single condition.
 True differential analyses involve comparison of counts between libraries for different conditions.
 This can be more useful as differential interactions are more likely to be relevant to the biological difference of interest.
-To demonstrate, data will be loaded from a ChIA-PET experiment targeting RNA polymerase II in both MCF7 and K562 cells \citep{li2012extensive}. 
-A bin counting strategy is used here to extract the homo-linker counts in each library.
+To demonstrate, we'll use data from a ChIA-PET experiment targeting RNA polymerase II in MCF7 and K562 cells \citep{li2012extensive}. 
+Homo-linker counts are first counted into bin pairs:
 
 <<>>=
 curfiles <- c("SRR372741_AA.h5", "SRR372741_BB.h5",
