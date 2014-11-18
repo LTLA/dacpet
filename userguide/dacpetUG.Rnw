@@ -690,14 +690,13 @@ normfacs
 
 Note that only inter-chromosomal interactions are used in the TMM procedure. 
 This weakens the assumption of a non-specific majority as genuine interactions between chromosomes are rarer than those within chromosomes. 
-In the MA plot above, all inter-chromosomal interactions lie within the main bulk of M-values at $\sim$2 whereas only intra-chromosomal interactions make up the cloud at $\sim$7.
-This is consistent with the specificity of the latter.
-
+In the MA plot above, all inter-chromosomal interactions lie within the main bulk of M-values at $\sim$2 whereas only intra-chromosomal events are in the cloud at $\sim$7.
+This is consistent with the greater specificity of the latter.
 
 \chapter{Assessing biological variability}
 
 \section{Motivation}
-The availability of biological replicates means that the analysis can account for biological variability when performing hypothesis testing. 
+The availability of biological replicates means that the biological variability of the system can be modelled.
 This reduces the significance of detected features when the data is highly variable. 
 For count-based data, this can be achieved using the NB model in \edgeR{} \citep{edgeR}.  
 Estimation of the NB dispersion parameter allows modelling of the variation between biological replicates. 
@@ -715,10 +714,10 @@ y <- asDGEList(freqs, norm.factors=normfacs)
 
 \section{The paired-sample design}
 \label{sec:paireddesign}
-The most obvious choice is a paired-sample design, where the homo- and hetero-linker counts from a single library are paired together.
+The most obvious choice is a paired-samples design, where the homo- and hetero-linker counts from a single library are paired together.
 The aim is to identify differences between the homo- and hetero-linker counts within each pair. 
 This design accommodates library-specific effects, i.e., differences in the absolute abundance between libraries will not affect the result as long as the homo-/hetero-linker count ratio is constant between libraries.
-This avoids inflation of the dispersions due to batch effects between libraries.
+This avoids any inflation of the dispersions due to batch effects between libraries.
 
 <<>>=
 design.paired <- model.matrix(~factor(info(freqs)$libname) + factor(info(freqs)$hetero))
@@ -726,7 +725,7 @@ design.paired
 @
 
 Estimation of the dispersions can then be performed using methods in the \edgeR{} package. 
-The \code{estimateDisp} function will estimate the NB dispersion whereas the \code{glmQLFTest} function will estimate the QL dispersion. 
+The \code{estimateDisp} function will estimate the NB dispersion whereas the \code{glmQLFit} function will estimate the QL dispersion. 
 In both cases, the low number of replicates means that limited information is available to estimate the dispersion for each interaction. 
 Thus, an empirical Bayes strategy is used to stabilise the estimates by sharing information between interactions. 
 This is represented by the estimation of a mean-dispersion trend (for NB) and shrinkage of the per-interaction dispersion estimates towards a trend (for QL).
@@ -739,6 +738,8 @@ plotBCV(y.paired)
 <<label=qlpaired,eval=FALSE,echo=FALSE>>=
 fit.paired <- glmQLFit(y.paired, design.paired, robust=TRUE)
 plotQLDisp(fit.paired)
+is.zero <- fit$df.residual.zeros==0L
+points(fit.paired$AveLogCPM[is.zero], 0, pch=4)
 @
 
 <<eval=FALSE>>=
@@ -746,9 +747,10 @@ plotQLDisp(fit.paired)
 <<qlpaired>>
 @
 
-Note that the biological coefficient of variation is defined as the square root of the NB dispersion. 
+Note that the biological coefficient of variation (BCV) is defined as the square root of the NB dispersion. 
 This represents the proportion of the counts that is attributable to biological variability. 
 The QL dispersion is estimated from the GLM deviance and is shown as such, with a quarter-root transformation applied for maximum visibility across the range of values.
+Crosses indicate those bin pairs with no residual degrees of freedom in the fit.
 
 \setkeys{Gin}{width=0.49\textwidth}
 \begin{center}
@@ -769,11 +771,11 @@ This manifests as zero values for most of the QL dispersions in the plot above.
 
 It may be possible to overcome this problem by adding a prior value onto the counts. 
 This will avoid zeros and allow passage through the QL framework. 
-However, this is a fairly arbitrary solution as the estimated dispersion will depend on the chosen prior. 
+However, this is a fairly arbitrary solution as the estimated dispersion will be sensitive to the choice of prior.
 It will also lead to underestimation of the dispersion, as the hetero-linker count will become a non-zero constant that does not reflect the true variability of the counts.
 
 \section{The one-way design}
-In this author's opinion, routine ChIA-PET analyses should use a one-way layout for the design matrix. 
+Instead, routine ChIA-PET analyses should use a one-way layout for the design matrix. 
 All hetero-linker counts are treated as a single group, and all homo-linker counts are treated as another group. 
 This means that the NB and QL dispersions can be properly estimated from the non-zero homo-linker counts, even when the hetero-linker counts are all zero.
 
@@ -784,8 +786,8 @@ design.group
 
 Estimation can be performed as previously described. 
 This approach avoids the zero-valued QL dispersions observed for the paired-sample design. 
-Of course, the one-way layout assumes that there are no library-specific effects. 
-For example, if the absolute count size changed randomly between libraries but the homo-/hetero-linker fold change was constant, the dispersions would be inflated in the one-way design but not in the paired-sample design.
+Of course, it assumes that there are no library-specific effects. 
+For example, if the abundance changed randomly between libraries but the homo-/hetero-linker fold change was constant, the dispersions would be inflated in the one-way design but not in the paired-sample design.
 The homo-/hetero-linker group means would also be correlated, which could cause problems in downstream testing.
 
 <<label=bcvgroup,eval=FALSE,echo=FALSE>>=
@@ -816,8 +818,10 @@ plotQLDisp(fit.group)
 
 Based on these results, inflation of the NB dispersion is not a problem here.
 In fact, the NB dispersion is exceptionally low given that biological replicates are being compared. 
-For most other types of sequencing data (e.g., RNA-seq, ChIP-seq), NB dispersion estimates are usually around 0.01 to 0.1 but much lower values are observed here. 
-This is a bit puzzling given that ChIA-PET should reflect the variability of ChIP-seq, and then some.
+For other types of sequencing data like RNA-seq or ChIP-seq, dispersion estimates are usually around 0.01 to 0.1.
+Much lower values are observed here, i.e., $<$ 0.01 after squaring the BCV.
+This is a bit odd, as ChIA-PET should be at least as variable as ChIP-seq.
+Oh well.
 
 \chapter{Testing for significant interactions}
 
